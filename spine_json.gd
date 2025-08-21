@@ -1,12 +1,33 @@
 extends Node
 
+"""
+更新日志
+20250808：发现插槽下网格会有隐藏的情况，经过排查，是slots数据中如果插槽含有attachment键，
+则显示，否则默认隐藏。
+经过再次检查，原因是attachment键会有重名，导致检测bug，不能仅依靠附件名判断，还需要根据插槽名判断
+
+20250808：网格畸形BUG，经过排查发现是因为计算顶点坐标时候父骨骼会参与计算，当骨骼没有父骨骼时网格恢复正常，
+并且该网格受到两根骨骼的影响，初步诊断，插槽在骨骼里就会畸变，插槽直接在root中则正常
+再次诊断，原因是没有判断一种情况，即顶点权重来自非父骨骼，而是其他同级骨骼
+之前陷入了一个误区，spine中插槽不会受到骨骼的影响，仅当骨骼有权重时才会受到变换的影响
+当一个骨骼作为插槽父骨骼但没有权重时，移动父骨骼将不会影响网格
+
+20250808：网格畸形BUG,网格顶点计算要考虑多个骨骼影响。目前只实现了单根骨骼
+骨骼变换只需要考虑权重骨即可，不需要考虑权重骨的父骨骼
+
+发现BUG，没有权重的网格，会受到骨骼变换影响
+20250809：功能缺失：不支持使用连接网格
+20250809：核心问题，带权重的网格需不需要继承父层级变换
+"""
+
+
 var node_2d: Node2D
 var 图片路径 = ""
 var res图像路径 = ""
 var ext文本 = {}#用于修复场景文件的图片引用路径
 
 var 带权重网格重设父级 = true
-var 使用atlas图集 = false
+var 使用atlas图集 = true
 var atlas路径 = ""
 var 图集数据 = {}
 
@@ -137,6 +158,9 @@ func 生成骨骼(json):
 		s[i['name']] = b
 		b.name = i['name']
 		
+		if i.has('color'):
+			b.self_modulate = i['color']
+		
 		if i.has('parent'):
 			s[i['parent']].add_child(b)
 		else:
@@ -230,6 +254,7 @@ func parse_weights(data: Array) -> Array:
 		result.append(bones_and_weights)
 	return result
 
+
 func 生成插槽(json,s,k):
 	var c:Dictionary = {}
 	var z = 0
@@ -313,16 +338,72 @@ func 生成插槽(json,s,k):
 						if _uvs.size() < _ver.size():
 							var _weights = parse_weights(_ver)
 							for _i in _weights:
-								var 骨骼号 = _i[0]["bone_id"]
-								var 骨骼数据 = json.data["bones"][骨骼号]
-								var 最终坐标 = Vector2(_i[0]["x"],_i[0]["y"])
+								#var 骨骼号 = _i[0]["bone_id"]
+								#var 骨骼数据 = json.data["bones"][骨骼号]
+								
+								# 计算单个顶点的所有骨骼权重
+								var 顶点坐标 = {"x": 0,"y": 0}
+								for ii in _i:
+									顶点坐标["x"] = 顶点坐标["x"] + ii["x"] * ii["weight"]
+									顶点坐标["y"] = 顶点坐标["y"] + ii["y"] * ii["weight"]
+								
+								
+								var 最终坐标 = Vector2(顶点坐标["x"],顶点坐标["y"])
+								
+								# 寻找所有带权重的骨骼，并计算最终变换
+								var 汇总坐标 = Vector2.ZERO
+								for ii in _i:
+									var 骨骼号 = ii["bone_id"]
+									var 骨骼数据 = json.data["bones"][骨骼号]
+									var 单根权重骨最终坐标 = Vector2.ZERO
+									单根权重骨最终坐标.x = 最终坐标.x
+									单根权重骨最终坐标.y = 最终坐标.y
+									# 计算单根权重骨骼的所有父层级骨骼影响
+									while true:
+										var 旋转值 = 0
+										if 骨骼数据.has("rotation"):
+											旋转值 = 骨骼数据['rotation']#计算顶点不需要*-1
+										if 骨骼数据.has("transform"):# 如果骨骼不继承父骨骼的旋转，通常是IK的脚
+											if 骨骼数据["transform"] == "noRotationOrReflection":
+												旋转值 = s[插槽骨名].rotation_degrees*-1# 获取已经生成骨骼的旋转并还原-1
+												# 此处有bug
+												print("遇到一个不继承旋转的骨骼:"+str(插槽骨名))
+										var pos = Vector2.ZERO
+										if 骨骼数据.has("x"):
+											pos.x = 骨骼数据['x']
+										if 骨骼数据.has("y"):
+											pos.y = 骨骼数据['y']#计算顶点不需要*-1
+										var sca = Vector2.ONE
+										if 骨骼数据.has("scaleX"):
+											sca.x = 骨骼数据['scaleX']
+										if 骨骼数据.has("scaleY"):
+											sca.y = 骨骼数据['scaleY']
+										
+										if 骨骼数据.has("parent"):
+											var 父骨名 = 骨骼数据["parent"]
+											for _b in json.data["bones"]:
+												if _b["name"] == 父骨名:
+													单根权重骨最终坐标 = (单根权重骨最终坐标*sca).rotated(deg_to_rad(旋转值))+pos
+										#			#单根权重骨最终坐标 = 单根权重骨最终坐标.rotated(deg_to_rad(旋转值))+pos
+													骨骼数据 = _b
+													break
+										else:
+											break
+									单根权重骨最终坐标 *= ii["weight"]
+									汇总坐标 += 单根权重骨最终坐标
+								最终坐标 = 汇总坐标
+								
+								"""
+								# 父骨骼本身的变换会影响网格点的计算
 								while true:
+									print("**********")
 									var 旋转值 = 0
 									if 骨骼数据.has("rotation"):
 										旋转值 = 骨骼数据['rotation']#计算顶点不需要*-1
 									if 骨骼数据.has("transform"):# 如果骨骼不继承父骨骼的旋转，通常是IK的脚
 										if 骨骼数据["transform"] == "noRotationOrReflection":
 											旋转值 = s[插槽骨名].rotation_degrees*-1# 获取已经生成骨骼的旋转并还原-1
+											# 此处有bug
 											print("遇到一个不继承旋转的骨骼:"+str(插槽骨名))
 									var pos = Vector2.ZERO
 									if 骨骼数据.has("x"):
@@ -334,19 +415,18 @@ func 生成插槽(json,s,k):
 										sca.x = 骨骼数据['scaleX']
 									if 骨骼数据.has("scaleY"):
 										sca.y = 骨骼数据['scaleY']
-									# 先旋转后加
-									if 骨骼数据["name"] != 插槽骨名:
-										最终坐标 = (最终坐标*sca).rotated(deg_to_rad(旋转值))+pos
-									else:
-										break
+									
 									if 骨骼数据.has("parent"):
 										var 父骨名 = 骨骼数据["parent"]
 										for _b in json.data["bones"]:
 											if _b["name"] == 父骨名:
+												# 先旋转后加
+												最终坐标 = (最终坐标*sca).rotated(deg_to_rad(旋转值))+pos
 												骨骼数据 = _b
 												break
 									else:
 										break
+								"""
 								最终坐标.y *= -1
 								points.append(最终坐标)
 						else:
@@ -370,7 +450,7 @@ func 生成插槽(json,s,k):
 						if _uvs.size() < _ver.size():
 							if 带权重网格重设父级:
 								_c.owner = null
-								_c.reparent(node_2d)# 带权重的网格需要放置到外面
+								_c.reparent(node_2d,false)# 带权重的网格需要放置到外面,不需要担心父骨骼变换
 								_c.owner = node_2d# 防止警告
 								_poly.owner = node_2d# 重新赋予
 							_poly.skeleton = _poly.get_path_to(k)# 没有权重不需要骨架
@@ -400,18 +480,19 @@ func 生成插槽(json,s,k):
 								_sn += 1
 							_poly.bones = new_bones
 							# 有权重网格才需要这样
-							var _gp = _poly.global_position
-							var _gr = _poly.global_rotation
+							#var _gp = _poly.global_position
+							#var _gr = _poly.global_rotation
 							#_poly.top_level = true# 网格本身不能受到骨骼影响，只会受到权重影响
-							_poly.global_position = _gp
-							_poly.global_rotation = _gr
+							#_poly.global_position = _gp
+							#_poly.global_rotation = _gr
 						
 						# 隐藏插槽只能显示一个东西
 						_poly.visible = false
 						for _i in json.data["slots"]:
-							if _i.has("attachment"):
-								if _i["attachment"] == i2:
-									_poly.visible = true
+							if i == _i["name"]:
+								if _i.has("attachment"):
+									if _i["attachment"] == i2:
+										_poly.visible = true
 						
 				else:# 如果没有类型说明就是图片
 					# 加载图片
@@ -465,9 +546,10 @@ func 生成插槽(json,s,k):
 					_sprite.visible = false
 					
 					for _i in json.data["slots"]:
-						if _i.has("attachment"):
-							if _i["attachment"] == i2:
-								_sprite.visible = true
+						if i == _i["name"]:
+							if _i.has("attachment"):
+								if _i["attachment"] == i2:
+									_sprite.visible = true
 				
 				# 给add模式的网格或图片加上材质
 				if _item:
@@ -583,6 +665,7 @@ func 创建动画(json,s,_k,c):
 					for _vd in 顶点帧:
 						var 延迟 = 0
 						var _offset = 0
+						# 如果源文件中有曲线，会导致这里报错_poly为null
 						var _vertices = _poly.polygon
 						if _vd.has('time'):
 							延迟 = _vd['time']

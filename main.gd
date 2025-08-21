@@ -78,10 +78,6 @@ func _on_check_box_toggled(toggled_on: bool) -> void:
 	spine_json.带权重网格重设父级 = toggled_on
 
 
-func _on_check_box_2_toggled(toggled_on: bool) -> void:
-	spine_json.使用atlas图集 = toggled_on
-
-
 func _on_选择atlas_pressed() -> void:
 	var dialog = FileDialog.new()
 	add_child(dialog)
