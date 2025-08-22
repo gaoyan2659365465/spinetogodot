@@ -1,0 +1,14 @@
+[gd_scene load_steps=3 format=3 uid="uid://b2v51om8xhjwt"]
+
+[ext_resource type="PackedScene" uid="uid://bunx10w7fj5hs" path="res://Spine编辑器/主视口.tscn" id="1_a350f"]
+[ext_resource type="Script" uid="uid://xo0itfxrdxmg" path="res://Spine编辑器/编辑器窗口.gd" id="1_lw6bn"]
+
+[node name="编辑器窗口" type="Window"]
+oversampling_override = 1.0
+position = Vector2i(0, 36)
+size = Vector2i(1000, 650)
+script = ExtResource("1_lw6bn")
+
+[node name="主视口" parent="." instance=ExtResource("1_a350f")]
+
+[connection signal="close_requested" from="." to="." method="_on_close_requested"]

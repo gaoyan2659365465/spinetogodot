@@ -2,14 +2,14 @@ extends Control
 
 
 @onready var spine_json: Node = $SpineJson
-var json路径 = ""
-@onready var 图像路径: LineEdit = $图像路径
 
 
-
+func _ready() -> void:
+	get_window().files_dropped.connect(_on_files_dropped)
 
 
 func _on_button_2_pressed() -> void:
+	# json目录按钮
 	var dialog = FileDialog.new()
 	add_child(dialog)
 	dialog.access = FileDialog.ACCESS_FILESYSTEM
@@ -19,25 +19,41 @@ func _on_button_2_pressed() -> void:
 	dialog.connect("file_selected", on_选择路径_file_selected)
 	dialog.set_title("选择Json文件")
 
-func _on_button_pressed() -> void:
+func on_选择路径_file_selected(path: String):
+	%JsonPath.text = path
+
+func _on_选择atlas_pressed() -> void:
+	var dialog = FileDialog.new()
+	add_child(dialog)
+	dialog.access = FileDialog.ACCESS_FILESYSTEM
+	dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
+	dialog.add_filter("*.atlas")
+	dialog.popup(Rect2i(200, 200, 500, 400))
+	dialog.connect("file_selected", on_选择路径atlas_file_selected)
+	dialog.set_title("选择atlas图集文件")
+
+func on_选择路径atlas_file_selected(path: String):
+	%AtlasPath.text = path
+
+func _on_选择输出_pressed() -> void:
+	# 保存文件目录按钮
 	var dialog = FileDialog.new()
 	add_child(dialog)
 	dialog.access = FileDialog.ACCESS_FILESYSTEM
 	#dialog.file_mode = FileDialog.FILE_MODE_OPEN_ANY
 	dialog.popup(Rect2i(200, 200, 500, 400))
 	dialog.add_filter("*.tscn")
-	dialog.connect("file_selected", on_保存文件_file_selected)
+	dialog.connect("file_selected", on_选择输出_file_selected)
 	dialog.set_title("保存文件")
 
-func on_选择路径_file_selected(path: String):
-	$LineEdit.text = path
+func on_选择输出_file_selected(path: String):
+	%ReturnPath.text = path
 
-func on_保存文件_file_selected(path: String):
-	json路径 = $LineEdit.text
-	spine_json.res图像路径 = 图像路径.text
-	
-	spine_json.atlas路径 = %LineEdit_AtlasPath.text
-	spine_json.保存文件(json路径,path)
+func _on_button_pressed() -> void:
+	# 保存文件目录按钮
+	spine_json.res图像路径 = %ResPath.text
+	spine_json.atlas路径 = %AtlasPath.text
+	spine_json.保存文件(%JsonPath.text,%ReturnPath.text)
 
 
 func _on_button_3_pressed() -> void:
@@ -78,18 +94,7 @@ func _on_check_box_toggled(toggled_on: bool) -> void:
 	spine_json.带权重网格重设父级 = toggled_on
 
 
-func _on_选择atlas_pressed() -> void:
-	var dialog = FileDialog.new()
-	add_child(dialog)
-	dialog.access = FileDialog.ACCESS_FILESYSTEM
-	dialog.file_mode = FileDialog.FILE_MODE_OPEN_FILE
-	dialog.add_filter("*.atlas")
-	dialog.popup(Rect2i(200, 200, 500, 400))
-	dialog.connect("file_selected", on_选择路径atlas_file_selected)
-	dialog.set_title("选择atlas图集文件")
 
-func on_选择路径atlas_file_selected(path: String):
-	%LineEdit_AtlasPath.text = path
 
 
 func _on_批量转换_pressed() -> void:
@@ -103,7 +108,7 @@ func _on_批量转换_pressed() -> void:
 		while file_name != "":
 			if dir.current_is_dir():
 				print("发现目录：" + file_name)
-				json路径 = path + file_name + "/" + file_name + ".json"
+				var json路径 = path + file_name + "/" + file_name + ".json"
 				spine_json.res图像路径 = "res://" + file_name + "/"
 				spine_json.atlas路径 = path + file_name + "/" + file_name + ".atlas"
 				var 导出路径 = path + file_name + "/" + file_name + ".tscn"
@@ -116,9 +121,26 @@ func _on_批量转换_pressed() -> void:
 	else:
 		print("尝试访问路径时出错。")
 
+
+func _on_预览_pressed() -> void:
+	spine_json.res图像路径 = %ResPath.text
+	spine_json.atlas路径 = %AtlasPath.text
+	Global.根节点 = spine_json.预览文件(%JsonPath.text)
+	get_tree().get_root().gui_embed_subwindows = false
+	var w = preload("res://Spine编辑器/编辑器窗口.tscn").instantiate()
+	w.gui_embed_subwindows = false
+	add_child(w)
 	
-	#json路径 = $LineEdit.text
-	#spine_json.res图像路径 = 图像路径.text
+
+
+func _on_files_dropped(files):
+	for i in files:
+		var path:String = i
+		if path.get_extension() == "json":
+			%JsonPath.text = path
+		if path.get_extension() == "atlas":
+			%AtlasPath.text = path
+			%ReturnPath.text = path.get_basename() + ".tscn"
+			
+	print(files)
 	
-	#spine_json.atlas路径 = %LineEdit_AtlasPath.text
-	#spine_json.保存文件(json路径,path)

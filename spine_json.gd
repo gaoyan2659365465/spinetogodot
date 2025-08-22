@@ -18,6 +18,8 @@ extends Node
 发现BUG，没有权重的网格，会受到骨骼变换影响
 20250809：功能缺失：不支持使用连接网格
 20250809：核心问题，带权重的网格需不需要继承父层级变换
+
+20250822：拖拽文件直接修改路径
 """
 
 
@@ -27,23 +29,23 @@ var res图像路径 = ""
 var ext文本 = {}#用于修复场景文件的图片引用路径
 
 var 带权重网格重设父级 = true
-var 使用atlas图集 = true
 var atlas路径 = ""
 var 图集数据 = {}
+var 图集Image
+var 是否浏览 = false
 
 func _ready() -> void:
-	#var data = 加载atlas图集("C:/Users/26593/Desktop/out/03.txt")
-	#print(data)
 	pass
 
 
 func 保存文件(json路径,导出路径):
+	是否浏览 = false
 	图片路径 = json路径.get_base_dir() + "/"
 	node_2d = Node2D.new()
 	node_2d.name = "Node2D"
 	
-	if 使用atlas图集:
-		图集数据 = 加载atlas图集(atlas路径)
+
+	图集数据 = 加载atlas图集(atlas路径)
 	
 	var json = load(json路径)
 	var g = 生成骨骼(json)
@@ -56,27 +58,34 @@ func 保存文件(json路径,导出路径):
 	修复依赖路径(导出路径)
 
 
+func 预览文件(json路径):
+	是否浏览 = true
+	图片路径 = json路径.get_base_dir() + "/"
+	node_2d = Node2D.new()
+	node_2d.name = "Node2D"
+	
+
+	图集数据 = 加载atlas图集(atlas路径)
+	
+	var json = load(json路径)
+	var g = 生成骨骼(json)
+	var c = 生成插槽(json,g[0],g[1])
+	创建动画(json,g[0],g[1],c)
+	return node_2d
+
+
 func 修复依赖路径(file_path):
 	var file = FileAccess.open(file_path, FileAccess.READ)
 	var content = file.get_as_text()
 	file.close()
 	
-	if 使用atlas图集:
-		# 替换内容
-		content = content.replace("metadata/atlas_path = ", "atlas = ExtResource(")# 精灵图
-		content = content.replace("metadata/png_path = ", "texture = ExtResource(")# 网格
-		content = content.replace(".png_ExtResource\"", ".png\")")
-		var n = content.find("[sub_resource")
-		var _ext_text = "[ext_resource type=\"Texture2D\" path=\"{0}\" id=\"{1}\"]".format([res图像路径+图集数据["图集图片名"],图集数据["图集图片名"]])
-		content = content.insert(n,_ext_text+"\n")
-	else:
-		# 替换内容
-		content = content.replace("metadata/png_path = ", "texture = ExtResource(")
-		content = content.replace(".png_ExtResource\"", ".png\")")
-		for i in ext文本.keys():
-			var n = content.find("[sub_resource")
-			content = content.insert(n,i+"\n")
-		ext文本.clear()
+	# 替换内容
+	content = content.replace("metadata/atlas_path = ", "atlas = ExtResource(")# 精灵图
+	content = content.replace("metadata/png_path = ", "texture = ExtResource(")# 网格
+	content = content.replace(".png_ExtResource\"", ".png\")")
+	var n = content.find("[sub_resource")
+	var _ext_text = "[ext_resource type=\"Texture2D\" path=\"{0}\" id=\"{1}\"]".format([res图像路径+图集数据["图集图片名"],图集数据["图集图片名"]])
+	content = content.insert(n,_ext_text+"\n")
 	
 	file = FileAccess.open(file_path, FileAccess.WRITE)
 	file.store_string(content)
@@ -97,6 +106,11 @@ func 加载atlas图集(atlas_path):
 				atlas_dict[当前图名] = {}
 			if content.find(".png") != -1:# 说明这一行是图集图片名第一行
 				atlas_dict["图集图片名"] = content
+				if 是否浏览:
+					var path = file.get_path().get_base_dir() + '/' + content
+					var img_tex = ImageTexture.new()
+					img_tex.set_image(Image.load_from_file(path))
+					图集Image = img_tex
 		else:
 			if 当前图名 == "":
 				continue
@@ -113,12 +127,7 @@ func 加载atlas图集(atlas_path):
 			if content.find("index:") != -1:
 				atlas_dict[当前图名]['index'] = str_to_var(content.get_slice(": ", 1))
 	file.close()
-	
-	
-	
 	return atlas_dict
-	
-	
 
 
 func sort_ascending(a, b):
@@ -298,20 +307,18 @@ func 生成插槽(json,s,k):
 						#tex.load(图片路径+ 图片名 +".png")
 						
 						print(图片路径+ 图片名 +".png")
-						if 使用atlas图集:
-							# polygon2D无法用AtlasTexture只能直接放置大图
-							var _xy = 图集数据[图片名]["xy"]
-							var _size = 图集数据[图片名]["size"]
-							var _orig = 图集数据[图片名]["orig"]
-							var _offset = 图集数据[图片名]["offset"]
-							#tex.region = Rect2(_xy[0], _xy[1], _size[0], _size[1])
-							#tex.margin = Rect2(_offset[0], _offset[1], _orig[0]-_size[0], _orig[1]-_size[1])
-							_poly.texture_offset = Vector2(_xy[0], _xy[1])
-							_poly.set_meta("png_path",图集数据['图集图片名'] +"_ExtResource")
-						else:
-							var _ext_text = "[ext_resource type=\"Texture2D\" path=\"{0}\" id=\"{1}\"]".format([res图像路径+图片名 +".png",图片名 +".png"])
-							ext文本[_ext_text] = ''
-							_poly.set_meta("png_path",图片名 +".png_ExtResource")
+						# polygon2D无法用AtlasTexture只能直接放置大图
+						var _xy = 图集数据[图片名]["xy"]
+						var _size = 图集数据[图片名]["size"]
+						var _orig = 图集数据[图片名]["orig"]
+						var _offset = 图集数据[图片名]["offset"]
+						#tex.region = Rect2(_xy[0], _xy[1], _size[0], _size[1])
+						#tex.margin = Rect2(_offset[0], _offset[1], _orig[0]-_size[0], _orig[1]-_size[1])
+						_poly.texture_offset = Vector2(_xy[0], _xy[1])
+						_poly.set_meta("png_path",图集数据['图集图片名'] +"_ExtResource")
+						if 是否浏览:
+							# 只有预览的时候需要
+							_poly.texture = 图集Image
 						
 						_poly.name = i2
 						_c.add_child(_poly)
@@ -506,20 +513,18 @@ func 生成插槽(json,s,k):
 					#_sprite.texture = load(图片路径 + 图片名 + ".png")
 					
 					print(图片路径+ 图片名 +".png")
-					if 使用atlas图集:
-						var tex = AtlasTexture.new()
-						var _xy = 图集数据[图片名]["xy"]
-						var _size = 图集数据[图片名]["size"]
-						var _orig = 图集数据[图片名]["orig"]
-						var _offset = 图集数据[图片名]["offset"]
-						tex.region = Rect2(_xy[0], _xy[1], _size[0], _size[1])
-						tex.margin = Rect2(_offset[0], _offset[1], _orig[0]-_size[0], _orig[1]-_size[1])
-						_sprite.texture = tex
-						tex.set_meta("atlas_path",图集数据['图集图片名'] +"_ExtResource")
-					else:
-						var _ext_text = "[ext_resource type=\"Texture2D\" path=\"{0}\" id=\"{1}\"]".format([res图像路径+图片名 +".png",图片名 +".png"])
-						ext文本[_ext_text] = ''
-						_sprite.set_meta("png_path",图片名 +".png_ExtResource")
+					var tex = AtlasTexture.new()
+					var _xy = 图集数据[图片名]["xy"]
+					var _size = 图集数据[图片名]["size"]
+					var _orig = 图集数据[图片名]["orig"]
+					var _offset = 图集数据[图片名]["offset"]
+					tex.region = Rect2(_xy[0], _xy[1], _size[0], _size[1])
+					tex.margin = Rect2(_offset[0], _offset[1], _orig[0]-_size[0], _orig[1]-_size[1])
+					if 是否浏览:
+						# 只有预览的时候需要
+						tex.atlas = 图集Image
+					_sprite.texture = tex
+					tex.set_meta("atlas_path",图集数据['图集图片名'] +"_ExtResource")
 					
 					_sprite.name = i2
 					_c.add_child(_sprite)

@@ -1,0 +1,67 @@
+[gd_scene load_steps=5 format=3 uid="uid://bunx10w7fj5hs"]
+
+[ext_resource type="Script" uid="uid://oomwnbigxlki" path="res://Spine编辑器/主视口.gd" id="1_20ml3"]
+[ext_resource type="Script" uid="uid://bg8ay7ks2mytd" path="res://Spine编辑器/层级树控件/层级树.gd" id="3_46ykk"]
+[ext_resource type="Script" uid="uid://dgrapyc48k6tn" path="res://Spine编辑器/绘制控件.gd" id="3_l4pvb"]
+[ext_resource type="Script" uid="uid://cb4eiy30wt32h" path="res://Spine编辑器/层级树面板.gd" id="3_lb4v7"]
+
+[node name="主视口" type="Node2D"]
+script = ExtResource("1_20ml3")
+
+[node name="CanvasLayer" type="CanvasLayer" parent="."]
+
+[node name="SplitContainer" type="SplitContainer" parent="CanvasLayer"]
+z_index = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+split_offset = 842
+
+[node name="绘制控件" type="Control" parent="CanvasLayer/SplitContainer"]
+layout_mode = 2
+mouse_filter = 1
+script = ExtResource("3_l4pvb")
+
+[node name="背景色" type="ColorRect" parent="CanvasLayer/SplitContainer"]
+custom_minimum_size = Vector2(298, 0)
+layout_mode = 2
+color = Color(0.176471, 0.176471, 0.176471, 1)
+
+[node name="MarginContainer" type="MarginContainer" parent="CanvasLayer/SplitContainer/背景色"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer" type="VBoxContainer" parent="CanvasLayer/SplitContainer/背景色/MarginContainer"]
+layout_mode = 2
+script = ExtResource("3_lb4v7")
+
+[node name="层级树" type="Control" parent="CanvasLayer/SplitContainer/背景色/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+script = ExtResource("3_46ykk")
+
+[node name="VBoxContainer" type="HBoxContainer" parent="CanvasLayer"]
+anchors_preset = -1
+offset_right = 134.0
+offset_bottom = 43.0
+
+[node name="Button" type="Button" parent="CanvasLayer/VBoxContainer"]
+layout_mode = 2
+text = "播放动画"
+
+[node name="OptionButton" type="OptionButton" parent="CanvasLayer/VBoxContainer"]
+unique_name_in_owner = true
+layout_mode = 2
+
+[connection signal="pressed" from="CanvasLayer/VBoxContainer/Button" to="." method="_on_button_pressed"]

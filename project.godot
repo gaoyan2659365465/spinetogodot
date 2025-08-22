@@ -15,6 +15,10 @@ run/main_scene="uid://b8bq0ndfavr5i"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://icon.svg"
 
+[autoload]
+
+Global="*res://Spine编辑器/global.gd"
+
 [display]
 
 window/size/viewport_width=500
