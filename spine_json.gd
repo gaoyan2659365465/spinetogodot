@@ -20,6 +20,8 @@ extends Node
 20250809：核心问题，带权重的网格需不需要继承父层级变换
 
 20250822：拖拽文件直接修改路径
+20250825：继承缩放导致骨骼本身缩放被忽略
+不继承旋转分情况，有权重和无权重两种情况
 """
 
 
@@ -181,12 +183,6 @@ func 生成骨骼(json):
 		if i.has("rotation"):
 			b.rotation_degrees = i['rotation']*-1# 此处未处理不继承旋转的骨骼
 		
-		if i.has('transform'):
-			if i['transform'] == "noRotationOrReflection":
-				if i.has("rotation"):
-					b.global_rotation_degrees = i['rotation']*-1# 此处处理不继承旋转的骨骼
-			
-		
 		var pos = Vector2.ZERO
 		if i.has("x"):
 			pos.x = i['x']
@@ -202,6 +198,29 @@ func 生成骨骼(json):
 			sca.y = i['scaleY']
 		b.scale = sca
 		b.owner = node_2d
+		
+		if i.has('transform'):
+			var remote_transform = RemoteTransform2D.new()
+			b.get_parent().add_child(remote_transform)
+			remote_transform.position = b.position
+			remote_transform.scale = b.scale
+			remote_transform.owner = node_2d
+			# 设置远程路径
+			#remote_transform.remote_path = remote_transform.get_path_to(b)
+			b.top_level = true
+			remote_transform.update_position = true
+			# BUG k帧的时候，k的不是骨骼，而是remote节点
+			if i['transform'] == "noRotationOrReflection":
+				remote_transform.update_rotation = false
+				remote_transform.update_scale = true
+			if i['transform'] == "onlyTranslation":
+				remote_transform.update_rotation = false
+				remote_transform.update_scale = false
+			if i['transform'] == "noScaleOrReflection":
+				remote_transform.update_rotation = true
+				remote_transform.update_scale = false
+			
+		
 	
 	# 生成IK
 	if json.data.has("ik"):
@@ -341,12 +360,16 @@ func 生成插槽(json,s,k):
 								插槽骨名 = _i["bone"]
 						var points:PackedVector2Array = []
 						var _ver = a["vertices"]
+						
 						# 如果UV数据比顶点数据多，说明有权重信息
 						if _uvs.size() < _ver.size():
 							var _weights = parse_weights(_ver)
 							for _i in _weights:
 								#var 骨骼号 = _i[0]["bone_id"]
 								#var 骨骼数据 = json.data["bones"][骨骼号]
+								
+								var 不继承旋转 = false
+								var 不继承缩放 = false
 								
 								# 计算单个顶点的所有骨骼权重
 								var 顶点坐标 = {"x": 0,"y": 0}
@@ -368,77 +391,58 @@ func 生成插槽(json,s,k):
 									# 计算单根权重骨骼的所有父层级骨骼影响
 									while true:
 										var 旋转值 = 0
-										if 骨骼数据.has("rotation"):
-											旋转值 = 骨骼数据['rotation']#计算顶点不需要*-1
-										if 骨骼数据.has("transform"):# 如果骨骼不继承父骨骼的旋转，通常是IK的脚
-											if 骨骼数据["transform"] == "noRotationOrReflection":
-												旋转值 = s[插槽骨名].rotation_degrees*-1# 获取已经生成骨骼的旋转并还原-1
-												# 此处有bug
-												print("遇到一个不继承旋转的骨骼:"+str(插槽骨名))
+										if not 不继承旋转:
+											if 骨骼数据.has("rotation"):
+												旋转值 = 骨骼数据['rotation']#计算顶点不需要*-1
+										
 										var pos = Vector2.ZERO
 										if 骨骼数据.has("x"):
 											pos.x = 骨骼数据['x']
 										if 骨骼数据.has("y"):
 											pos.y = 骨骼数据['y']#计算顶点不需要*-1
+										
 										var sca = Vector2.ONE
-										if 骨骼数据.has("scaleX"):
-											sca.x = 骨骼数据['scaleX']
-										if 骨骼数据.has("scaleY"):
-											sca.y = 骨骼数据['scaleY']
+										if not 不继承缩放:
+											if 骨骼数据.has("scaleX"):
+												sca.x = 骨骼数据['scaleX']
+											if 骨骼数据.has("scaleY"):
+												sca.y = 骨骼数据['scaleY']
+										sca = Vector2.ONE#BUG 带权重的网格不需要考虑缩放
+										
+										
+										if 骨骼数据.has("transform"):# 如果骨骼不继承父骨骼的旋转，通常是IK的脚
+											if 骨骼数据["transform"] == "noRotationOrReflection":
+												不继承旋转 = true
+											if 骨骼数据["transform"] == "noScaleOrReflection":
+												不继承缩放 = true
+											if 骨骼数据["transform"] == "onlyTranslation":
+												不继承旋转 = true
+												不继承缩放 = true
+										
 										
 										if 骨骼数据.has("parent"):
 											var 父骨名 = 骨骼数据["parent"]
 											for _b in json.data["bones"]:
 												if _b["name"] == 父骨名:
+													#单根权重骨最终坐标 = 单根权重骨最终坐标
 													单根权重骨最终坐标 = (单根权重骨最终坐标*sca).rotated(deg_to_rad(旋转值))+pos
-										#			#单根权重骨最终坐标 = 单根权重骨最终坐标.rotated(deg_to_rad(旋转值))+pos
 													骨骼数据 = _b
 													break
 										else:
+											#单根权重骨最终坐标 = 单根权重骨最终坐标
+											单根权重骨最终坐标 = (单根权重骨最终坐标*sca).rotated(deg_to_rad(旋转值))+pos
 											break
+										
 									单根权重骨最终坐标 *= ii["weight"]
 									汇总坐标 += 单根权重骨最终坐标
-								最终坐标 = 汇总坐标
 								
-								"""
-								# 父骨骼本身的变换会影响网格点的计算
-								while true:
-									print("**********")
-									var 旋转值 = 0
-									if 骨骼数据.has("rotation"):
-										旋转值 = 骨骼数据['rotation']#计算顶点不需要*-1
-									if 骨骼数据.has("transform"):# 如果骨骼不继承父骨骼的旋转，通常是IK的脚
-										if 骨骼数据["transform"] == "noRotationOrReflection":
-											旋转值 = s[插槽骨名].rotation_degrees*-1# 获取已经生成骨骼的旋转并还原-1
-											# 此处有bug
-											print("遇到一个不继承旋转的骨骼:"+str(插槽骨名))
-									var pos = Vector2.ZERO
-									if 骨骼数据.has("x"):
-										pos.x = 骨骼数据['x']
-									if 骨骼数据.has("y"):
-										pos.y = 骨骼数据['y']#计算顶点不需要*-1
-									var sca = Vector2.ONE
-									if 骨骼数据.has("scaleX"):
-										sca.x = 骨骼数据['scaleX']
-									if 骨骼数据.has("scaleY"):
-										sca.y = 骨骼数据['scaleY']
-									
-									if 骨骼数据.has("parent"):
-										var 父骨名 = 骨骼数据["parent"]
-										for _b in json.data["bones"]:
-											if _b["name"] == 父骨名:
-												# 先旋转后加
-												最终坐标 = (最终坐标*sca).rotated(deg_to_rad(旋转值))+pos
-												骨骼数据 = _b
-												break
-									else:
-										break
-								"""
+								最终坐标 = 汇总坐标
 								最终坐标.y *= -1
 								points.append(最终坐标)
 						else:
 							for _i in range(0, _ver.size(), 2):
 								points.append(Vector2(_ver[_i],_ver[_i+1]*-1))# 网格点Y需要*-1
+
 						_poly.polygon = points
 						_poly.internal_vertex_count = _uvs.size()/2-a["hull"]
 						
@@ -456,9 +460,17 @@ func 生成插槽(json,s,k):
 						# 如果UV数据比顶点数据多，说明有权重信息
 						if _uvs.size() < _ver.size():
 							if 带权重网格重设父级:
+								#var _pos = _c.position
+								#var _rot = _c.rotation
+								#var _scale = _c.scale
+								#print(_scale)
 								_c.owner = null
 								_c.reparent(node_2d,false)# 带权重的网格需要放置到外面,不需要担心父骨骼变换
 								_c.owner = node_2d# 防止警告
+								#_c.position = _pos
+								#_c.rotation = _rot
+								#_c.scale = _scale
+								
 								_poly.owner = node_2d# 重新赋予
 							_poly.skeleton = _poly.get_path_to(k)# 没有权重不需要骨架
 

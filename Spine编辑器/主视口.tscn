@@ -52,7 +52,6 @@ size_flags_vertical = 3
 script = ExtResource("3_46ykk")
 
 [node name="VBoxContainer" type="HBoxContainer" parent="CanvasLayer"]
-anchors_preset = -1
 offset_right = 134.0
 offset_bottom = 43.0
 

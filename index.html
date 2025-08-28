@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SpineToGodot - 将Spine动画转换为Godot场景</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header>
+        <nav>
+            <div class="container">
+                <h1>SpineToGodot</h1>
+                <ul>
+                    <li><a href="#home">首页</a></li>
+                    <li><a href="#features">功能</a></li>
+                    <li><a href="#tutorial">教程</a></li>
+                    <li><a href="#download">下载</a></li>
+                    <li><a href="#about">关于</a></li>
+                </ul>
+            </div>
+        </nav>
+    </header>
+
+    <section id="home" class="hero">
+        <div class="container">
+            <h2>将Spine动画无缝转换为Godot场景</h2>
+            <p>SpineToGodot是一款强大的工具，帮助Godot开发者轻松导入和编辑Spine动画文件。</p>
+            <a href="#download" class="btn btn-primary">立即下载</a>
+        </div>
+    </section>
+
+    <section id="features" class="features">
+        <div class="container">
+            <h2>主要功能</h2>
+            <div class="feature-grid">
+                <div class="feature-item">
+                    <h3>JSON转换</h3>
+                    <p>将Spine JSON文件快速转换为Godot场景文件(.tscn)</p>
+                </div>
+                <div class="feature-item">
+                    <h3>Atlas支持</h3>
+                    <p>支持Spine Atlas图集文件，保持纹理完整性</p>
+                </div>
+                <div class="feature-item">
+                    <h3>批量转换</h3>
+                    <p>批量处理多个动画文件，提高工作效率</p>
+                </div>
+                <div class="feature-item">
+                    <h3>可视化编辑器</h3>
+                    <p>内置编辑器界面，实时预览和调整动画</p>
+                </div>
+                <div class="feature-item">
+                    <h3>插槽管理</h3>
+                    <p>强大的插槽系统，支持切换和层级管理</p>
+                </div>
+                <div class="feature-item">
+                    <h3>骨骼动画</h3>
+                    <p>完整支持Spine骨骼动画和变形</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="tutorial" class="tutorial">
+        <div class="container">
+            <h2>视频教程</h2>
+            <p>跟随我们的详细教程，快速上手SpineToGodot</p>
+            <div class="video-grid">
+                <div class="video-item">
+                    <a href="https://www.bilibili.com/video/BV131keYbEvX/?spm_id_from=333.1387.collection.video_card.click&vd_source=f47562e5f97b089b19ebb200499e92cb" target="_blank">
+                        <img src="https://images.unsplash.com/photo-1461749280684-dccba630e2f6?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80" alt="教程第1集" onerror="this.src='https://via.placeholder.com/320x180?text=教程第1集'">
+                        <div class="video-overlay">
+                            <h4>Godot骨骼动画训练营第一课</h4>
+                            <p>点击观看B站教程</p>
+                        </div>
+                    </a>
+                </div>
+                <div class="video-item">
+                    <a href="https://www.bilibili.com/video/BV131keYbEhb?spm_id_from=333.788.videopod.sections&vd_source=f47562e5f97b089b19ebb200499e92cb" target="_blank">
+                        <img src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80" alt="教程第2集" onerror="this.src='https://via.placeholder.com/320x180?text=教程第2集'">
+                        <div class="video-overlay">
+                            <h4>Godot骨骼动画训练营第二课</h4>
+                            <p>点击观看B站教程</p>
+                        </div>
+                    </a>
+                </div>
+                <div class="video-item">
+                    <a href="https://www.bilibili.com/video/BV1g1keYbE6U?spm_id_from=333.788.videopod.sections&vd_source=f47562e5f97b089b19ebb200499e92cb" target="_blank">
+                        <img src="https://images.unsplash.com/photo-1555066931-4365d14bab8c?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80" alt="Godot骨骼动画训练营第三课" onerror="this.src='https://via.placeholder.com/320x180?text=Godot骨骼动画训练营第三课'">
+                        <div class="video-overlay">
+                            <h4>Godot骨骼动画训练营第三课</h4>
+                            <p>点击观看B站教程</p>
+                        </div>
+                    </a>
+                </div>
+                <div class="video-item">
+                    <a href="https://www.bilibili.com/video/BV1Q1keYbEbF?spm_id_from=333.788.videopod.sections&vd_source=f47562e5f97b089b19ebb200499e92cb" target="_blank">
+                        <img src="https://images.unsplash.com/photo-1486312338219-ce68d2c6b44d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80" alt="Godot骨骼动画训练营第四课" onerror="this.src='https://via.placeholder.com/320x180?text=Godot骨骼动画训练营第四课'">
+                        <div class="video-overlay">
+                            <h4>Godot骨骼动画训练营第四课</h4>
+                            <p>点击观看B站教程</p>
+                        </div>
+                    </a>
+                </div>
+                <div class="video-item">
+                    <a href="https://www.bilibili.com/video/BV131keYbEwt?spm_id_from=333.788.videopod.sections&vd_source=f47562e5f97b089b19ebb200499e92cb" target="_blank">
+                        <img src="https://images.unsplash.com/photo-1517180102446-f3ece451e9d8?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80" alt="Godot骨骼动画训练营第五课" onerror="this.src='https://via.placeholder.com/320x180?text=Godot骨骼动画训练营第五课'">
+                        <div class="video-overlay">
+                            <h4>Godot骨骼动画训练营第五课</h4>
+                            <p>点击观看B站教程</p>
+                        </div>
+                    </a>
+                </div>
+                <div class="video-item">
+                    <a href="https://www.bilibili.com/video/BV131keYbEeW?spm_id_from=333.788.videopod.sections&vd_source=f47562e5f97b089b19ebb200499e92cb" target="_blank">
+                        <img src="https://images.unsplash.com/photo-1522542550221-31fd19575a2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80" alt="Godot骨骼动画训练营第六课" onerror="this.src='https://via.placeholder.com/320x180?text=Godot骨骼动画训练营第六课'">
+                        <div class="video-overlay">
+                            <h4>Godot骨骼动画训练营第六课</h4>
+                            <p>点击观看B站教程</p>
+                        </div>
+                    </a>
+                </div>
+                <div class="video-item">
+                    <a href="https://www.bilibili.com/video/BV131keYbEsn?spm_id_from=333.788.videopod.sections&vd_source=f47562e5f97b089b19ebb200499e92cb" target="_blank">
+                        <img src="https://images.unsplash.com/photo-1555949963-aa79dcee981c?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80" alt="Godot骨骼动画训练营第七课" onerror="this.src='https://via.placeholder.com/320x180?text=Godot骨骼动画训练营第七课'">
+                        <div class="video-overlay">
+                            <h4>Godot骨骼动画训练营第七课</h4>
+                            <p>点击观看B站教程</p>
+                        </div>
+                    </a>
+                </div>
+                <div class="video-item">
+                    <a href="https://www.bilibili.com/video/BV1h1keYbEMA?spm_id_from=333.788.videopod.sections&vd_source=f47562e5f97b089b19ebb200499e92cb" target="_blank">
+                        <img src="https://images.unsplash.com/photo-1516321318423-f06f85e504b3?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80" alt="Godot骨骼动画训练营第八课" onerror="this.src='https://via.placeholder.com/320x180?text=Godot骨骼动画训练营第八课'">
+                        <div class="video-overlay">
+                            <h4>Godot骨骼动画训练营第八课</h4>
+                            <p>点击观看B站教程</p>
+                        </div>
+                    </a>
+                </div>
+                <div class="video-item">
+                    <a href="https://www.bilibili.com/video/BV1ceVHz2Ep9?spm_id_from=333.788.videopod.sections&vd_source=f47562e5f97b089b19ebb200499e92cb" target="_blank">
+                        <img src="https://images.unsplash.com/photo-1555066931-4365d14bab8c?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80" alt="Spine转godot" onerror="this.src='https://via.placeholder.com/320x180?text=Spine转godot'">
+                        <div class="video-overlay">
+                            <h4>Spine转godot</h4>
+                            <p>点击观看B站教程</p>
+                        </div>
+                    </a>
+                </div>
+                <div class="video-item">
+                    <a href="https://www.bilibili.com/video/BV1As7yzdEKB?spm_id_from=333.788.videopod.sections&vd_source=f47562e5f97b089b19ebb200499e92cb" target="_blank">
+                        <img src="https://images.unsplash.com/photo-1486312338219-ce68d2c6b44d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80" alt="AI生图骨骼动画" onerror="this.src='https://via.placeholder.com/320x180?text=AI生图骨骼动画'">
+                        <div class="video-overlay">
+                            <h4>AI生图骨骼动画</h4>
+                            <p>点击观看B站教程</p>
+                        </div>
+                    </a>
+                </div>
+                <div class="video-item">
+                    <a href="https://www.bilibili.com/video/BV1GQtczyE1A?spm_id_from=333.788.videopod.sections&vd_source=f47562e5f97b089b19ebb200499e92cb" target="_blank">
+                        <img src="https://images.unsplash.com/photo-1517180102446-f3ece451e9d8?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80" alt="Godot4骨骼显示改变样式插件" onerror="this.src='https://via.placeholder.com/320x180?text=Godot4骨骼显示改变样式插件'">
+                        <div class="video-overlay">
+                            <h4>Godot4骨骼显示改变样式插件</h4>
+                            <p>点击观看B站教程</p>
+                        </div>
+                    </a>
+                </div>
+                <div class="video-item">
+                    <a href="https://www.bilibili.com/video/BV1jWetzgEAS?spm_id_from=333.788.videopod.sections&vd_source=f47562e5f97b089b19ebb200499e92cb" target="_blank">
+                        <img src="https://images.unsplash.com/photo-1522542550221-31fd19575a2d?ixlib=rb-4.0.3&auto=format&fit=crop&w=400&q=80" alt="Spine转godot升级啦" onerror="this.src='https://via.placeholder.com/320x180?text=Spine转godot升级啦'">
+                        <div class="video-overlay">
+                            <h4>Spine转godot升级啦</h4>
+                            <p>点击观看B站教程</p>
+                        </div>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="download" class="download">
+        <div class="container">
+            <h2>下载SpineToGodot</h2>
+            <p>当前仅支持Windows平台</p>
+            <div class="download-options">
+                <a href="https://github.com/gaoyan2659365465/spinetogodot/releases/download/godot/SpineToGodot.exe" class="btn btn-secondary">Windows (EXE)</a>
+            </div>
+            <p class="note">下载后解压即可使用，无需额外安装。</p>
+        </div>
+    </section>
+
+    <section id="about" class="about">
+        <div class="container">
+            <h2>关于项目</h2>
+            <p>SpineToGodot由柯哀的眼开发，旨在简化Spine动画在Godot引擎中的使用流程。</p>
+            <p>该工具基于Godot 4.5开发，<strong>仅支持Spine 3.8.75格式</strong>。</p>
+            <div class="contact">
+                <h3>联系我们</h3>
+                <p>GitHub: <a href="https://github.com/gaoyan2659365465/spinetogodot">github.com/gaoyan2659365465/spinetogodot</a></p>
+                <p>邮箱: 2659365465@qq.com</p>
+            </div>
+        </div>
+    </section>
+
+    <footer>
+        <div class="container">
+            <p>&copy; 2024 SpineToGodot. 保留所有权利。</p>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>
