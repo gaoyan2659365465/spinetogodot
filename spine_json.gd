@@ -22,6 +22,9 @@ extends Node
 20250822：拖拽文件直接修改路径
 20250825：继承缩放导致骨骼本身缩放被忽略
 不继承旋转分情况，有权重和无权重两种情况
+
+20250905:修改网格畸变BUG，每根骨骼的权重需要单独计算
+20250905:发现新BUG，不勾选继承旋转后，矩阵计算方式被改变
 """
 
 
@@ -282,6 +285,106 @@ func parse_weights(data: Array) -> Array:
 		result.append(bones_and_weights)
 	return result
 
+# 假设 Bone_Data 是你在 JSON 中解析出来的骨骼字典
+# 它可以包含 'name', 'parent', 'x', 'y', 'rotation', 'scaleX', 'scaleY', 'transform'
+func get_local_transform_matrix(bone_data: Dictionary) -> Transform2D:
+	var pos = Vector2.ZERO
+	if bone_data.has("x"): pos.x = bone_data["x"]
+	if bone_data.has("y"): pos.y = bone_data["y"] * -1 # Spine Y轴通常是向下，Godot Y轴向下
+	
+	var rot_degrees = 0.0
+	if bone_data.has("rotation"): rot_degrees = bone_data["rotation"] # 注意这里不需要 *-1，因为是计算世界变换，最终点Y翻转
+	
+	var scale = Vector2.ONE
+	if bone_data.has("scaleX"): scale.x = bone_data["scaleX"]
+	if bone_data.has("scaleY"): scale.y = bone_data["scaleY"]
+	
+	# 结合这些分量创建一个局部变换矩阵
+	var matrix = Transform2D()
+	matrix = matrix.scaled(scale)
+	matrix = matrix.rotated(deg_to_rad(rot_degrees))
+	matrix.origin = pos
+	return matrix
+
+
+func calculate_bone_world_matrix(bone_name: String, bone_data_map: Dictionary) -> Transform2D:
+	var bone_current_data = bone_data_map[bone_name]
+	var local_matrix = get_local_transform_matrix(bone_current_data)
+	
+	if not bone_current_data.has("parent"):
+		# 如果是根骨骼，其世界矩阵就是其局部矩阵
+		return local_matrix
+	
+	var parent_name = bone_current_data["parent"]
+	var parent_world_matrix = calculate_bone_world_matrix(parent_name, bone_data_map)
+	
+	# 应用 transform 模式
+	var final_matrix = Transform2D.IDENTITY
+	if bone_current_data.has("transform"):
+		var transform_mode = bone_current_data["transform"]
+		
+		# 将局部矩阵的平移、旋转、缩放分量分离出来
+		var local_pos = local_matrix.origin
+		var local_rot_rad = local_matrix.rotation() # 获取弧度
+		var local_scale = local_matrix.get_scale()
+		
+		# 将父世界矩阵的平移、旋转、缩放分量分离出来
+		var parent_world_pos = parent_world_matrix.origin
+		var parent_world_rot_rad = parent_world_matrix.rotation()
+		var parent_world_scale = parent_world_matrix.get_scale()
+
+		var current_pos = Vector2.ZERO
+		var current_rot_rad = 0.0
+		var current_scale = Vector2.ONE
+
+		match transform_mode:
+			"noRotationOrReflection":
+				# 继承父骨骼的平移和缩放
+				current_pos = parent_world_pos + parent_world_matrix.basis_xform(local_pos)
+				current_scale = parent_world_scale * local_scale
+				# 自身旋转应用到自身局部坐标
+				current_rot_rad = local_rot_rad
+				
+				# 构建结果矩阵：先缩放，再旋转，再平移
+				final_matrix = Transform2D()
+				final_matrix = final_matrix.scaled(current_scale)
+				final_matrix = final_matrix.rotated(current_rot_rad)
+				final_matrix.origin = current_pos
+				
+			"onlyTranslation":
+				# 只继承父骨骼的平移
+				current_pos = parent_world_pos + parent_world_matrix.basis_xform(local_pos) # 局部平移在父世界空间中
+				current_scale = local_scale # 自身缩放
+				current_rot_rad = local_rot_rad # 自身旋转
+				
+				# 构建结果矩阵：先缩放，再旋转，再平移
+				final_matrix = Transform2D()
+				final_matrix = final_matrix.scaled(current_scale)
+				final_matrix = final_matrix.rotated(current_rot_rad)
+				final_matrix.origin = current_pos
+				
+			"noScaleOrReflection":
+				# 继承父骨骼的平移和旋转
+				current_pos = parent_world_pos + parent_world_matrix.basis_xform(local_pos)
+				current_rot_rad = parent_world_rot_rad + local_rot_rad
+				current_scale = local_scale # 自身缩放
+				
+				# 构建结果矩阵：先缩放，再旋转，再平移
+				final_matrix = Transform2D()
+				final_matrix = final_matrix.scaled(current_scale)
+				final_matrix = final_matrix.rotated(current_rot_rad)
+				final_matrix.origin = current_pos
+				
+			_: # 默认情况（无特殊模式，或者其他未处理的模式）
+				# 正常继承所有父级变换
+				final_matrix = parent_world_matrix * local_matrix # 矩阵乘法自动处理
+	else:
+		# 如果没有 transform 模式，正常继承所有父级变换
+		final_matrix = parent_world_matrix * local_matrix
+		
+	return final_matrix
+
+
 
 func 生成插槽(json,s,k):
 	var c:Dictionary = {}
@@ -325,7 +428,7 @@ func 生成插槽(json,s,k):
 						#var tex = CompressedTexture2D.new()
 						#tex.load(图片路径+ 图片名 +".png")
 						
-						print(图片路径+ 图片名 +".png")
+						#print(图片路径+ 图片名 +".png")
 						# polygon2D无法用AtlasTexture只能直接放置大图
 						var _xy = 图集数据[图片名]["xy"]
 						var _size = 图集数据[图片名]["size"]
@@ -353,11 +456,6 @@ func 生成插槽(json,s,k):
 							uvs.append(Vector2(_uvs[_i]*_uvw,_uvs[_i+1]*_uvh))
 						_poly.uv = uvs
 						
-						# 获取插槽的父骨骼
-						var 插槽骨名 = ""
-						for _i in json.data["slots"]:
-							if i == _i["name"]:
-								插槽骨名 = _i["bone"]
 						var points:PackedVector2Array = []
 						var _ver = a["vertices"]
 						
@@ -365,35 +463,22 @@ func 生成插槽(json,s,k):
 						if _uvs.size() < _ver.size():
 							var _weights = parse_weights(_ver)
 							for _i in _weights:
-								#var 骨骼号 = _i[0]["bone_id"]
-								#var 骨骼数据 = json.data["bones"][骨骼号]
-								
-								var 不继承旋转 = false
-								var 不继承缩放 = false
-								
 								# 计算单个顶点的所有骨骼权重
-								var 顶点坐标 = {"x": 0,"y": 0}
-								for ii in _i:
-									顶点坐标["x"] = 顶点坐标["x"] + ii["x"] * ii["weight"]
-									顶点坐标["y"] = 顶点坐标["y"] + ii["y"] * ii["weight"]
 								
-								
-								var 最终坐标 = Vector2(顶点坐标["x"],顶点坐标["y"])
-								
+								var 最终坐标 = Vector2.ZERO
 								# 寻找所有带权重的骨骼，并计算最终变换
 								var 汇总坐标 = Vector2.ZERO
 								for ii in _i:
 									var 骨骼号 = ii["bone_id"]
 									var 骨骼数据 = json.data["bones"][骨骼号]
 									var 单根权重骨最终坐标 = Vector2.ZERO
-									单根权重骨最终坐标.x = 最终坐标.x
-									单根权重骨最终坐标.y = 最终坐标.y
+									单根权重骨最终坐标.x = ii["x"]
+									单根权重骨最终坐标.y = ii["y"]
 									# 计算单根权重骨骼的所有父层级骨骼影响
 									while true:
 										var 旋转值 = 0
-										if not 不继承旋转:
-											if 骨骼数据.has("rotation"):
-												旋转值 = 骨骼数据['rotation']#计算顶点不需要*-1
+										if 骨骼数据.has("rotation"):
+											旋转值 = 骨骼数据['rotation']#计算顶点不需要*-1
 										
 										var pos = Vector2.ZERO
 										if 骨骼数据.has("x"):
@@ -402,14 +487,17 @@ func 生成插槽(json,s,k):
 											pos.y = 骨骼数据['y']#计算顶点不需要*-1
 										
 										var sca = Vector2.ONE
-										if not 不继承缩放:
-											if 骨骼数据.has("scaleX"):
-												sca.x = 骨骼数据['scaleX']
-											if 骨骼数据.has("scaleY"):
-												sca.y = 骨骼数据['scaleY']
-										sca = Vector2.ONE#BUG 带权重的网格不需要考虑缩放
+										if 骨骼数据.has("scaleX"):
+											sca.x = 骨骼数据['scaleX']
+										if 骨骼数据.has("scaleY"):
+											sca.y = 骨骼数据['scaleY']
+										#sca = Vector2.ONE#BUG 带权重的网格不需要考虑缩放
 										
+										# 2. 应用当前骨骼的局部变换
+										# 这一步将坐标从当前骨骼的局部空间，变换到了其父骨骼的局部空间
+										单根权重骨最终坐标 = (单根权重骨最终坐标*sca).rotated(deg_to_rad(旋转值))+pos
 										
+										"""
 										if 骨骼数据.has("transform"):# 如果骨骼不继承父骨骼的旋转，通常是IK的脚
 											if 骨骼数据["transform"] == "noRotationOrReflection":
 												不继承旋转 = true
@@ -418,19 +506,30 @@ func 生成插槽(json,s,k):
 											if 骨骼数据["transform"] == "onlyTranslation":
 												不继承旋转 = true
 												不继承缩放 = true
-										
+										"""
 										
 										if 骨骼数据.has("parent"):
 											var 父骨名 = 骨骼数据["parent"]
+											var 找到父骨骼 = false
 											for _b in json.data["bones"]:
 												if _b["name"] == 父骨名:
-													#单根权重骨最终坐标 = 单根权重骨最终坐标
-													单根权重骨最终坐标 = (单根权重骨最终坐标*sca).rotated(deg_to_rad(旋转值))+pos
+													# 4. 在进入下一次循环（处理父骨骼）之前，检查当前骨骼的 transform 模式
+													if 骨骼数据.has("transform"):
+														if 骨骼数据["transform"] == "noRotationOrReflection":
+															# 如果当前骨骼不继承旋转，那么在下一次变换中，
+															# 我们需要“抵消”掉父骨骼的旋转对坐标点朝向的影响。
+															# 我们通过将点“反向旋转”父骨骼的角度来实现。
+															var 父骨骼旋转值 = 0
+															if _b.has("rotation"):
+																父骨骼旋转值 = _b["rotation"]
+																单根权重骨最终坐标 = 单根权重骨最终坐标.rotated(deg_to_rad(-父骨骼旋转值))
 													骨骼数据 = _b
+													找到父骨骼 = true
 													break
+											if not 找到父骨骼:
+												break # 没找到父骨骼，结束
 										else:
-											#单根权重骨最终坐标 = 单根权重骨最终坐标
-											单根权重骨最终坐标 = (单根权重骨最终坐标*sca).rotated(deg_to_rad(旋转值))+pos
+											# 没有父骨骼了，循环结束
 											break
 										
 									单根权重骨最终坐标 *= ii["weight"]
@@ -583,7 +682,7 @@ func 生成插槽(json,s,k):
 								if _i["blend"] == "additive":
 									var mat = CanvasItemMaterial.new()
 									mat.blend_mode = CanvasItemMaterial.BLEND_MODE_ADD
-									_item.get_parent().material = mat #给插槽材质 
+									_item.get_parent().material = mat #给插槽材质
 									_item.use_parent_material = true #继承插槽的材质
 	return c
 
