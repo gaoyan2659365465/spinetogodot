@@ -31,7 +31,3 @@ project/assembly_name="SpineToGodot"
 [editor_plugins]
 
 enabled=PackedStringArray("res://addons/spine/plugin.cfg")
-
-[gui]
-
-theme/custom_font="uid://dlwg65dxdr64d"

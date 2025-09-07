@@ -25,6 +25,8 @@ extends Node
 
 20250905:修改网格畸变BUG，每根骨骼的权重需要单独计算
 20250905:发现新BUG，不勾选继承旋转后，矩阵计算方式被改变
+20250906：使用矩阵彻底解决网格畸变BUG
+
 """
 
 
@@ -185,6 +187,11 @@ func 生成骨骼(json):
 		
 		if i.has("rotation"):
 			b.rotation_degrees = i['rotation']*-1# 此处未处理不继承旋转的骨骼
+			if i.has('transform'):
+				if i['transform'] == "noRotationOrReflection":
+					b.global_rotation_degrees = i['rotation']*-1
+				if i['transform'] == "onlyTranslation":
+					b.global_rotation_degrees = i['rotation']*-1
 		
 		var pos = Vector2.ZERO
 		if i.has("x"):
@@ -210,7 +217,7 @@ func 生成骨骼(json):
 			remote_transform.owner = node_2d
 			# 设置远程路径
 			#remote_transform.remote_path = remote_transform.get_path_to(b)
-			b.top_level = true
+			#b.top_level = true
 			remote_transform.update_position = true
 			# BUG k帧的时候，k的不是骨骼，而是remote节点
 			if i['transform'] == "noRotationOrReflection":
@@ -290,7 +297,7 @@ func parse_weights(data: Array) -> Array:
 func get_local_transform_matrix(bone_data: Dictionary) -> Transform2D:
 	var pos = Vector2.ZERO
 	if bone_data.has("x"): pos.x = bone_data["x"]
-	if bone_data.has("y"): pos.y = bone_data["y"] * -1 # Spine Y轴通常是向下，Godot Y轴向下
+	if bone_data.has("y"): pos.y = bone_data["y"] # <-- 注意：此处不再乘以 -1
 	
 	var rot_degrees = 0.0
 	if bone_data.has("rotation"): rot_degrees = bone_data["rotation"] # 注意这里不需要 *-1，因为是计算世界变换，最终点Y翻转
@@ -299,11 +306,10 @@ func get_local_transform_matrix(bone_data: Dictionary) -> Transform2D:
 	if bone_data.has("scaleX"): scale.x = bone_data["scaleX"]
 	if bone_data.has("scaleY"): scale.y = bone_data["scaleY"]
 	
-	# 结合这些分量创建一个局部变换矩阵
-	var matrix = Transform2D()
+	# 使用 Godot 4 的构造函数创建包含旋转和平移的变换
+	var matrix = Transform2D(deg_to_rad(rot_degrees), pos)
+	# .scaled() 方法会返回一个新的、经过正确缩放的 Transform2D
 	matrix = matrix.scaled(scale)
-	matrix = matrix.rotated(deg_to_rad(rot_degrees))
-	matrix.origin = pos
 	return matrix
 
 
@@ -318,71 +324,53 @@ func calculate_bone_world_matrix(bone_name: String, bone_data_map: Dictionary) -
 	var parent_name = bone_current_data["parent"]
 	var parent_world_matrix = calculate_bone_world_matrix(parent_name, bone_data_map)
 	
-	# 应用 transform 模式
-	var final_matrix = Transform2D.IDENTITY
 	if bone_current_data.has("transform"):
 		var transform_mode = bone_current_data["transform"]
 		
 		# 将局部矩阵的平移、旋转、缩放分量分离出来
 		var local_pos = local_matrix.origin
-		var local_rot_rad = local_matrix.rotation() # 获取弧度
+		var local_rot_rad = local_matrix.get_rotation() # 获取弧度
 		var local_scale = local_matrix.get_scale()
 		
 		# 将父世界矩阵的平移、旋转、缩放分量分离出来
 		var parent_world_pos = parent_world_matrix.origin
-		var parent_world_rot_rad = parent_world_matrix.rotation()
+		var parent_world_rot_rad = parent_world_matrix.get_rotation()
 		var parent_world_scale = parent_world_matrix.get_scale()
-
-		var current_pos = Vector2.ZERO
-		var current_rot_rad = 0.0
-		var current_scale = Vector2.ONE
 
 		match transform_mode:
 			"noRotationOrReflection":
 				# 继承父骨骼的平移和缩放
-				current_pos = parent_world_pos + parent_world_matrix.basis_xform(local_pos)
-				current_scale = parent_world_scale * local_scale
-				# 自身旋转应用到自身局部坐标
-				current_rot_rad = local_rot_rad
-				
-				# 构建结果矩阵：先缩放，再旋转，再平移
-				final_matrix = Transform2D()
-				final_matrix = final_matrix.scaled(current_scale)
-				final_matrix = final_matrix.rotated(current_rot_rad)
-				final_matrix.origin = current_pos
+				var new_pos = parent_world_pos + parent_world_matrix.basis_xform(local_pos)
+				var new_scale = parent_world_scale * local_scale
+				# 旋转只使用自己的局部旋转
+				var new_rot_rad = local_rot_rad
+				var final_matrix = Transform2D(new_rot_rad, new_pos)
+				return final_matrix.scaled(new_scale)
 				
 			"onlyTranslation":
 				# 只继承父骨骼的平移
-				current_pos = parent_world_pos + parent_world_matrix.basis_xform(local_pos) # 局部平移在父世界空间中
-				current_scale = local_scale # 自身缩放
-				current_rot_rad = local_rot_rad # 自身旋转
-				
-				# 构建结果矩阵：先缩放，再旋转，再平移
-				final_matrix = Transform2D()
-				final_matrix = final_matrix.scaled(current_scale)
-				final_matrix = final_matrix.rotated(current_rot_rad)
-				final_matrix.origin = current_pos
+				var new_pos = parent_world_pos + parent_world_matrix.basis_xform(local_pos)
+				# 旋转和缩放都只使用自己的
+				var final_matrix = Transform2D(local_rot_rad, new_pos)
+				return final_matrix.scaled(local_scale)
 				
 			"noScaleOrReflection":
-				# 继承父骨骼的平移和旋转
-				current_pos = parent_world_pos + parent_world_matrix.basis_xform(local_pos)
-				current_rot_rad = parent_world_rot_rad + local_rot_rad
-				current_scale = local_scale # 自身缩放
-				
-				# 构建结果矩阵：先缩放，再旋转，再平移
-				final_matrix = Transform2D()
-				final_matrix = final_matrix.scaled(current_scale)
-				final_matrix = final_matrix.rotated(current_rot_rad)
-				final_matrix.origin = current_pos
+				# 继承父骨骼的缩放和平移
+				var new_pos = parent_world_pos + parent_world_matrix.basis_xform(local_pos)
+				var new_rot_rad = parent_world_rot_rad + local_rot_rad
+				# 缩放只使用自己的局部缩放，忽略父级
+				var new_scale = local_scale
+				var final_matrix = Transform2D(new_rot_rad, new_pos)
+				return final_matrix.scaled(new_scale)
 				
 			_: # 默认情况（无特殊模式，或者其他未处理的模式）
 				# 正常继承所有父级变换
-				final_matrix = parent_world_matrix * local_matrix # 矩阵乘法自动处理
+				return parent_world_matrix * local_matrix
 	else:
 		# 如果没有 transform 模式，正常继承所有父级变换
-		final_matrix = parent_world_matrix * local_matrix
+		return parent_world_matrix * local_matrix
 		
-	return final_matrix
+	return Transform2D.IDENTITY # 备用返回```
 
 
 
@@ -456,93 +444,58 @@ func 生成插槽(json,s,k):
 							uvs.append(Vector2(_uvs[_i]*_uvw,_uvs[_i+1]*_uvh))
 						_poly.uv = uvs
 						
-						var points:PackedVector2Array = []
+						
 						var _ver = a["vertices"]
+						
+						var points:PackedVector2Array = []
+						# 你可能需要一个字典来方便地通过名称查找骨骼数据
+						var bone_data_map = {}
+						for bone in json.data["bones"]:
+							bone_data_map[bone["name"]] = bone
+						
 						
 						# 如果UV数据比顶点数据多，说明有权重信息
 						if _uvs.size() < _ver.size():
+							var parent_bone_name = ''
+							for slots_i in json.data["slots"]:
+								if slots_i['name'] == i:
+									parent_bone_name = slots_i['bone']
+									break
+							# 1. 获取主父骨骼的世界逆矩阵
+							var parent_bone_world_matrix = calculate_bone_world_matrix(parent_bone_name, bone_data_map)
+							var parent_bone_world_inverse_matrix = parent_bone_world_matrix.affine_inverse()
+							
 							var _weights = parse_weights(_ver)
-							for _i in _weights:
+							for _i_vertex_weights in _weights: # _i_vertex_weights 是单个顶点的所有骨骼和权重信息
 								# 计算单个顶点的所有骨骼权重
 								
-								var 最终坐标 = Vector2.ZERO
-								# 寻找所有带权重的骨骼，并计算最终变换
-								var 汇总坐标 = Vector2.ZERO
-								for ii in _i:
-									var 骨骼号 = ii["bone_id"]
-									var 骨骼数据 = json.data["bones"][骨骼号]
-									var 单根权重骨最终坐标 = Vector2.ZERO
-									单根权重骨最终坐标.x = ii["x"]
-									单根权重骨最终坐标.y = ii["y"]
-									# 计算单根权重骨骼的所有父层级骨骼影响
-									while true:
-										var 旋转值 = 0
-										if 骨骼数据.has("rotation"):
-											旋转值 = 骨骼数据['rotation']#计算顶点不需要*-1
-										
-										var pos = Vector2.ZERO
-										if 骨骼数据.has("x"):
-											pos.x = 骨骼数据['x']
-										if 骨骼数据.has("y"):
-											pos.y = 骨骼数据['y']#计算顶点不需要*-1
-										
-										var sca = Vector2.ONE
-										if 骨骼数据.has("scaleX"):
-											sca.x = 骨骼数据['scaleX']
-										if 骨骼数据.has("scaleY"):
-											sca.y = 骨骼数据['scaleY']
-										#sca = Vector2.ONE#BUG 带权重的网格不需要考虑缩放
-										
-										# 2. 应用当前骨骼的局部变换
-										# 这一步将坐标从当前骨骼的局部空间，变换到了其父骨骼的局部空间
-										单根权重骨最终坐标 = (单根权重骨最终坐标*sca).rotated(deg_to_rad(旋转值))+pos
-										
-										"""
-										if 骨骼数据.has("transform"):# 如果骨骼不继承父骨骼的旋转，通常是IK的脚
-											if 骨骼数据["transform"] == "noRotationOrReflection":
-												不继承旋转 = true
-											if 骨骼数据["transform"] == "noScaleOrReflection":
-												不继承缩放 = true
-											if 骨骼数据["transform"] == "onlyTranslation":
-												不继承旋转 = true
-												不继承缩放 = true
-										"""
-										
-										if 骨骼数据.has("parent"):
-											var 父骨名 = 骨骼数据["parent"]
-											var 找到父骨骼 = false
-											for _b in json.data["bones"]:
-												if _b["name"] == 父骨名:
-													# 4. 在进入下一次循环（处理父骨骼）之前，检查当前骨骼的 transform 模式
-													if 骨骼数据.has("transform"):
-														if 骨骼数据["transform"] == "noRotationOrReflection":
-															# 如果当前骨骼不继承旋转，那么在下一次变换中，
-															# 我们需要“抵消”掉父骨骼的旋转对坐标点朝向的影响。
-															# 我们通过将点“反向旋转”父骨骼的角度来实现。
-															var 父骨骼旋转值 = 0
-															if _b.has("rotation"):
-																父骨骼旋转值 = _b["rotation"]
-																单根权重骨最终坐标 = 单根权重骨最终坐标.rotated(deg_to_rad(-父骨骼旋转值))
-													骨骼数据 = _b
-													找到父骨骼 = true
-													break
-											if not 找到父骨骼:
-												break # 没找到父骨骼，结束
-										else:
-											# 没有父骨骼了，循环结束
-											break
-										
-									单根权重骨最终坐标 *= ii["weight"]
-									汇总坐标 += 单根权重骨最终坐标
-								
-								最终坐标 = 汇总坐标
-								最终坐标.y *= -1
-								points.append(最终坐标)
+								var 最终坐标 = Vector2.ZERO # 这是这个网格顶点最终的世界坐标（在绑定姿势下）
+								for bone_weight_info in _i_vertex_weights: # 遍历影响当前顶点的每根骨骼
+									var bone_id_index = bone_weight_info["bone_id"] # 这是骨骼在 `json.data["bones"]` 数组中的索引
+									
+									var bone_name = json.data["bones"][bone_id_index]["name"] # 获取骨骼名称
+									if bone_name == 'hair2':
+										print('hair2')
+									var bone_world_matrix = calculate_bone_world_matrix(bone_name, bone_data_map) # 调用新的世界矩阵计算函数
+									
+									var local_offset_to_bone = Vector2(bone_weight_info["x"], bone_weight_info["y"]) # 顶点相对于该骨骼的局部偏移
+									
+									# 将局部偏移通过骨骼的世界矩阵转换到世界空间
+									var transformed_point = bone_world_matrix * local_offset_to_bone # xform 会应用旋转、缩放、平移
+									# 应用权重
+									最终坐标 += transformed_point * bone_weight_info["weight"]
+									
+								# 3. 将世界坐标转换为相对于父骨骼的局部坐标
+								var 最终局部坐标 = parent_bone_world_inverse_matrix * 最终坐标
+
+								最终局部坐标.y *= -1 # Godot Y轴向下，Spine Y轴向上（对于顶点）
+								points.append(最终局部坐标)
 						else:
 							for _i in range(0, _ver.size(), 2):
 								points.append(Vector2(_ver[_i],_ver[_i+1]*-1))# 网格点Y需要*-1
 
 						_poly.polygon = points
+						
 						_poly.internal_vertex_count = _uvs.size()/2-a["hull"]
 						
 						var trianles = []
@@ -559,19 +512,13 @@ func 生成插槽(json,s,k):
 						# 如果UV数据比顶点数据多，说明有权重信息
 						if _uvs.size() < _ver.size():
 							if 带权重网格重设父级:
-								#var _pos = _c.position
-								#var _rot = _c.rotation
-								#var _scale = _c.scale
-								#print(_scale)
 								_c.owner = null
-								_c.reparent(node_2d,false)# 带权重的网格需要放置到外面,不需要担心父骨骼变换
+								_c.reparent(node_2d,true)# 带权重的网格需要放置到外面,不需要担心父骨骼变换
 								_c.owner = node_2d# 防止警告
-								#_c.position = _pos
-								#_c.rotation = _rot
-								#_c.scale = _scale
 								
 								_poly.owner = node_2d# 重新赋予
 							_poly.skeleton = _poly.get_path_to(k)# 没有权重不需要骨架
+						
 
 							var _weights = parse_weights(_ver)
 						
@@ -611,6 +558,8 @@ func 生成插槽(json,s,k):
 								if _i.has("attachment"):
 									if _i["attachment"] == i2:
 										_poly.visible = true
+						
+						
 						
 				else:# 如果没有类型说明就是图片
 					# 加载图片
