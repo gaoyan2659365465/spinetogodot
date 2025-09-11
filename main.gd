@@ -88,12 +88,25 @@ class_name 插槽 extends Node2D
 		"""
 		file.store_string(default_content)
 		file.close()
+	
+	# 检查文件是否存在
+	if not FileAccess.file_exists(path+"/addons/spine/no_rotation.gd"):
+		var file = FileAccess.open(path+"/addons/spine/no_rotation.gd", FileAccess.WRITE)
+		var default_content = """
+@tool
+class_name NoRotation extends Node2D
 
+@export var 旋转:bool = true
+@export var 缩放:bool = true
 
-func _on_check_box_toggled(toggled_on: bool) -> void:
-	spine_json.带权重网格重设父级 = toggled_on
-
-
+func _process(_delta: float) -> void:
+	if not 旋转:
+		get_parent().global_rotation = rotation
+	if not 缩放:
+		get_parent().global_scale = scale
+		"""
+		file.store_string(default_content)
+		file.close()
 
 
 

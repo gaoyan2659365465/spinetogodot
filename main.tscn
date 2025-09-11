@@ -43,15 +43,6 @@ script = ExtResource("1_ig7tw")
 [node name="SpineJson" type="Node" parent="."]
 script = ExtResource("2_0xm2m")
 
-[node name="CheckBox" type="CheckBox" parent="."]
-layout_mode = 0
-offset_left = 37.0
-offset_top = 256.0
-offset_right = 305.0
-offset_bottom = 287.0
-button_pressed = true
-text = "重设带权重网格的父层级到根节点"
-
 [node name="安装插件" type="Button" parent="."]
 layout_mode = 0
 offset_left = 379.0
@@ -196,7 +187,6 @@ text = "开始转换"
 layout_mode = 2
 text = "预览"
 
-[connection signal="toggled" from="CheckBox" to="." method="_on_check_box_toggled"]
 [connection signal="pressed" from="安装插件" to="." method="_on_button_3_pressed"]
 [connection signal="pressed" from="PanelContainer/MarginContainer/VBoxContainer2/HBoxContainer3/选择json" to="." method="_on_button_2_pressed"]
 [connection signal="pressed" from="PanelContainer/MarginContainer/VBoxContainer2/HBoxContainer4/选择atlas" to="." method="_on_选择atlas_pressed"]

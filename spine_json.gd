@@ -27,6 +27,10 @@ extends Node
 20250905:发现新BUG，不勾选继承旋转后，矩阵计算方式被改变
 20250906：使用矩阵彻底解决网格畸变BUG
 
+20250909：发现BUG，root骨骼缩放导致权重网格错误，不支持root缩放的操作
+
+20250910：不继承骨骼的动画部分由RemoteTransform2D节点替代（缺陷：没有考虑不继承缩放和都不继承的情况）
+20250911：彻底修复不继承旋转骨骼问题，增加NoRotation
 """
 
 
@@ -210,26 +214,18 @@ func 生成骨骼(json):
 		b.owner = node_2d
 		
 		if i.has('transform'):
-			var remote_transform = RemoteTransform2D.new()
-			b.get_parent().add_child(remote_transform)
-			remote_transform.position = b.position
-			remote_transform.scale = b.scale
-			remote_transform.owner = node_2d
-			# 设置远程路径
-			#remote_transform.remote_path = remote_transform.get_path_to(b)
-			#b.top_level = true
-			remote_transform.update_position = true
-			# BUG k帧的时候，k的不是骨骼，而是remote节点
+			var no_rotation = NoRotation.new()
+			b.add_child(no_rotation)
+			no_rotation.rotation = b.global_rotation
+			no_rotation.owner = node_2d
+			no_rotation.name = 'NoRotation'
 			if i['transform'] == "noRotationOrReflection":
-				remote_transform.update_rotation = false
-				remote_transform.update_scale = true
+				no_rotation.旋转 = false
 			if i['transform'] == "onlyTranslation":
-				remote_transform.update_rotation = false
-				remote_transform.update_scale = false
+				no_rotation.旋转 = false
+				no_rotation.缩放 = false
 			if i['transform'] == "noScaleOrReflection":
-				remote_transform.update_rotation = true
-				remote_transform.update_scale = false
-			
+				no_rotation.缩放 = false
 		
 	
 	# 生成IK
@@ -637,6 +633,7 @@ func 生成插槽(json,s,k):
 
 func 创建动画(json,s,_k,c):
 	var animplay = AnimationPlayer.new()
+	animplay.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_PHYSICS
 	node_2d.add_child(animplay)
 	animplay.owner = node_2d
 	animplay.name = "AnimationPlayer"
@@ -794,13 +791,28 @@ func 创建动画(json,s,_k,c):
 		if lg_anim[i].has("bones"):
 			var 骨骼动画数据 = lg_anim[i]["bones"]
 			for 骨名 in 骨骼动画数据:
+				var bone_node = s[骨名]
+				# 查找与该骨骼关联的RemoteTransform2D节点
+				var remote_node = bone_node.find_child("NoRotation", false) # false表示非递归查找
+				# 默认情况下，动画目标是骨骼本身
+				var position_target = bone_node
+				var scale_target = bone_node
+				# 旋转动画始终应用于骨骼本身
+				var rotation_target = bone_node
+				if remote_node:
+					if not remote_node.旋转:
+						rotation_target = remote_node
+					if not remote_node.缩放:
+						scale_target = remote_node
+				
+				
 				if 骨骼动画数据[骨名].has("translate"):
 					var 位置通道 = {'x':0.0,'y':0.0}
 					for xy in 位置通道:
 						# 获取当前骨骼的原始变换
-						var 原始变换 = s[骨名].position
+						var 原始变换 = position_target.position
 						var 变换帧 = 骨骼动画数据[骨名]["translate"]
-						var 骨路径 =  str(node_2d.get_path_to(s[骨名])) + ":position:"+xy
+						var 骨路径 =  str(node_2d.get_path_to(position_target)) + ":position:"+xy
 						var track_index = animation.add_track(Animation.TYPE_BEZIER)# 添加轨道
 						animation.track_set_path(track_index, 骨路径)
 						var 旧贝塞尔 = Vector2(0.0,0.0) # 上一个帧的贝塞尔值
@@ -842,9 +854,9 @@ func 创建动画(json,s,_k,c):
 					
 				if 骨骼动画数据[骨名].has("rotate"):
 					# 获取当前骨骼的旋转值，单位度数
-					var 原始旋转值 = s[骨名].rotation_degrees
+					var 原始旋转值 = rotation_target.rotation_degrees
 					var 旋转帧 = 骨骼动画数据[骨名]["rotate"]
-					var 骨路径 =  str(node_2d.get_path_to(s[骨名])) + ":rotation"
+					var 骨路径 =  str(node_2d.get_path_to(rotation_target)) + ":rotation"
 					var track_index = animation.add_track(Animation.TYPE_VALUE)# 添加轨道
 					# 解决欧拉角 的旋转插值方式造成的逆向旋转BUG
 					animation.track_set_interpolation_type(track_index,Animation.INTERPOLATION_LINEAR_ANGLE)
@@ -887,9 +899,9 @@ func 创建动画(json,s,_k,c):
 					var 位置通道 = {'x':0.0,'y':0.0}
 					for xy in 位置通道:
 						# 获取当前骨骼的原始缩放
-						var 原始缩放 = s[骨名].scale
+						var 原始缩放 = scale_target.scale
 						var 缩放帧 = 骨骼动画数据[骨名]["scale"]
-						var 骨路径 =  str(node_2d.get_path_to(s[骨名])) + ":scale:"+xy
+						var 骨路径 =  str(node_2d.get_path_to(scale_target)) + ":scale:"+xy
 						var track_index = animation.add_track(Animation.TYPE_BEZIER)# 添加轨道
 						animation.track_set_path(track_index, 骨路径)
 						var 旧贝塞尔 = Vector2(0.0,0.0) # 上一个帧的贝塞尔值
@@ -994,5 +1006,24 @@ func 创建动画(json,s,_k,c):
 			var track_index3 = RESET_anim.add_track(Animation.TYPE_BEZIER)# 添加轨道
 			RESET_anim.track_set_path(track_index3, 骨骼缩放径)
 			RESET_anim.bezier_track_insert_key(track_index3,0.0, 缩放通道[xy])
+	
+	# 初始化所有NoRotation
+	for i in s:
+		var remote_node = s[i].find_child("NoRotation", false) # false表示非递归查找
+		if remote_node:
+			var 旋转径 =  str(node_2d.get_path_to(remote_node)) + ":rotation"
+			var track_index2 = RESET_anim.add_track(Animation.TYPE_VALUE)# 添加轨道
+			RESET_anim.track_set_path(track_index2, 旋转径)
+			RESET_anim.track_insert_key(track_index2,0.0, remote_node.rotation)
+			RESET_anim.value_track_set_update_mode(track_index2,Animation.UPDATE_DISCRETE)
+			# 必须要跟上面所有动画的插值类型一样才不会警告
+			RESET_anim.track_set_interpolation_type(track_index2,Animation.INTERPOLATION_LINEAR_ANGLE)
+			
+			var 缩放通道 = {'x':s[i].scale.x,'y':s[i].scale.y}
+			for xy in 缩放通道:
+				var 缩放径 =  str(node_2d.get_path_to(remote_node)) + ":scale:"+xy
+				var track_index3 = RESET_anim.add_track(Animation.TYPE_BEZIER)# 添加轨道
+				RESET_anim.track_set_path(track_index3, 缩放径)
+				RESET_anim.bezier_track_insert_key(track_index3,0.0, 缩放通道[xy])
 	#endregion
 		
