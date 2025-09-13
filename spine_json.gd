@@ -31,6 +31,9 @@ extends Node
 
 20250910：不继承骨骼的动画部分由RemoteTransform2D节点替代（缺陷：没有考虑不继承缩放和都不继承的情况）
 20250911：彻底修复不继承旋转骨骼问题，增加NoRotation
+
+20250913:发现BUG，IK系统如果多个修改器使用同一目标，不能单独设置混合(建议自建IK节点)
+20250913：解决动画曲线问题100%还原（缺陷，网格变形轨道无法贝塞尔）
 """
 
 
@@ -365,8 +368,6 @@ func calculate_bone_world_matrix(bone_name: String, bone_data_map: Dictionary) -
 	else:
 		# 如果没有 transform 模式，正常继承所有父级变换
 		return parent_world_matrix * local_matrix
-		
-	return Transform2D.IDENTITY # 备用返回```
 
 
 
@@ -449,7 +450,6 @@ func 生成插槽(json,s,k):
 						for bone in json.data["bones"]:
 							bone_data_map[bone["name"]] = bone
 						
-						
 						# 如果UV数据比顶点数据多，说明有权重信息
 						if _uvs.size() < _ver.size():
 							var parent_bone_name = ''
@@ -470,8 +470,6 @@ func 生成插槽(json,s,k):
 									var bone_id_index = bone_weight_info["bone_id"] # 这是骨骼在 `json.data["bones"]` 数组中的索引
 									
 									var bone_name = json.data["bones"][bone_id_index]["name"] # 获取骨骼名称
-									if bone_name == 'hair2':
-										print('hair2')
 									var bone_world_matrix = calculate_bone_world_matrix(bone_name, bone_data_map) # 调用新的世界矩阵计算函数
 									
 									var local_offset_to_bone = Vector2(bone_weight_info["x"], bone_weight_info["y"]) # 顶点相对于该骨骼的局部偏移
@@ -631,6 +629,30 @@ func 生成插槽(json,s,k):
 									_item.use_parent_material = true #继承插槽的材质
 	return c
 
+
+# 辅助函数：解析Spine曲线数据，返回[c1,c2,c3,c4]数组
+func parse_spine_curve(data: Dictionary) -> Array:
+	if not data.has("curve"):
+		# 默认线性曲线 (linear)
+		return [0.0, 0.0, 1.0, 1.0] 
+	
+	var curve = data["curve"]
+	if str(curve) == "stepped":
+		# 阶梯曲线 (stepped)
+		# 用贝塞尔模拟一个几乎垂直上升然后水平前进的曲线
+		return [100.0, 0.0, 1.0, 1.0]
+	elif typeof(curve) == TYPE_ARRAY:
+		# 已经是 [c1, c2, c3, c4] 格式
+		return curve
+	else: 
+		# 单个数字格式
+		var c1 = curve
+		var c2 = data.get("c2", 0.0)
+		var c3 = data.get("c3", 1.0)
+		var c4 = data.get("c4", 1.0)
+		return [c1, c2, c3, c4]
+
+
 func 创建动画(json,s,_k,c):
 	var animplay = AnimationPlayer.new()
 	animplay.callback_mode_process = AnimationMixer.ANIMATION_CALLBACK_MODE_PROCESS_PHYSICS
@@ -649,48 +671,81 @@ func 创建动画(json,s,_k,c):
 			for 插槽名 in 插槽动画数据:
 				if 插槽动画数据[插槽名].has("color"):
 					var 颜色帧 = 插槽动画数据[插槽名]["color"]
-					var 颜色通道 = {'r':c[插槽名].modulate.r,'g':c[插槽名].modulate.g,'b':c[插槽名].modulate.b,'a':c[插槽名].modulate.a}
-					for rgba in 颜色通道:
-						var 插槽径 =  str(node_2d.get_path_to(c[插槽名])) + ":modulate:"+rgba
-						var track_index = animation.add_track(Animation.TYPE_BEZIER)# 添加轨道
+					if 颜色帧.is_empty(): continue
+
+					var 原始颜色 = c[插槽名].modulate
+					
+					# 关键区别 1: 必须为 r, g, b, a 四个通道分别创建轨道
+					for rgba in ['r', 'g', 'b', 'a']:
+						var 插槽径 =  str(node_2d.get_path_to(c[插槽名])) + ":modulate:" + rgba
+						var track_index = animation.add_track(Animation.TYPE_BEZIER)
 						animation.track_set_path(track_index, 插槽径)
-						var 旧贝塞尔 = Vector2(0.0,0.0) # 上一个帧的贝塞尔值
-						var 延迟 = 0
-						for _y in 颜色帧:
-							var 颜色值 = ""
-							if _y.has("time"):
-								if 延迟 == 0:
-									animation.bezier_track_insert_key(track_index,_y["time"]-0.01, 颜色通道[rgba])# 添加第一帧初始化
-								延迟 = _y["time"]
-								if 预估时长<延迟:
-									预估时长 = 延迟
-							if _y.has("color"):
-								颜色值 = str(_y["color"])
-							var _颜色通道 = 0.0
-							if rgba == 'r':
-								_颜色通道 = Color(颜色值).r
-							elif rgba == 'g':
-								_颜色通道 = Color(颜色值).g
-							elif rgba == 'b':
-								_颜色通道 = Color(颜色值).b
-							elif rgba == 'a':
-								_颜色通道 = Color(颜色值).a
+
+						# -----------------------------------------------------------------
+						# 步骤 1: 将Spine数据解析成一个干净的Keyframe列表
+						# -----------------------------------------------------------------
+						var clean_keys = []
+						for frame_data in 颜色帧:
+							var time = frame_data.get("time", 0.0)
 							
-							var 贝塞尔 = {'c1':0.0,'c2':0.0,'c3':0.0,'c4':0.0}
-							if _y.has("curve"):
-								if str(_y["curve"]) == 'stepped':
-									贝塞尔['c1'] = 100.0
-								else:
-									贝塞尔['c1'] = _y["curve"]
-							if _y.has("c2"):
-								贝塞尔['c2'] = _y["c2"]
-							if _y.has("c3"):
-								贝塞尔['c3'] = -1.0+_y["c3"]
-							if _y.has("c4"):
-								贝塞尔['c4'] = -1.0+_y["c4"]
+							# 关键区别 2: 从 "color" hex 字符串中获取值
+							var final_color = 原始颜色
+							if frame_data.has("color"):
+								# Godot 的 Color() 构造函数可以直接解析 "rrggbbaa" 格式的十六进制字符串
+								final_color = Color(frame_data["color"])
 							
-							animation.bezier_track_insert_key(track_index,延迟, _颜色通道,旧贝塞尔, Vector2(贝塞尔['c1'],贝塞尔['c2']))
-							旧贝塞尔 = Vector2(贝塞尔['c3'],贝塞尔['c4'])
+							# 关键区别 3: 根据当前循环的通道 (r, g, b, a) 提取对应的浮点数值
+							var value = final_color[rgba]
+							
+							var curve_params = parse_spine_curve(frame_data)
+							
+							clean_keys.append({
+								"time": time,
+								"value": value,
+								"curve": curve_params
+							})
+
+						# -----------------------------------------------------------------
+						# 步骤 2: 计算绝对控制柄并插入到Godot轨道中 (逻辑完全相同)
+						# -----------------------------------------------------------------
+						for _i in range(clean_keys.size()):
+							var current_key = clean_keys[_i]
+							var in_handle = Vector2.ZERO
+							var out_handle = Vector2.ZERO
+
+							if _i > 0:
+								var prev_key = clean_keys[_i-1]
+								var delta_time = current_key.time - prev_key.time
+								var delta_value = current_key.value - prev_key.value
+								
+								var prev_curve = prev_key["curve"]
+								var c3 = prev_curve[2]
+								var c4 = prev_curve[3]
+								
+								in_handle.x = (c3 - 1.0) * delta_time
+								in_handle.y = (c4 - 1.0) * delta_value
+
+							if _i < clean_keys.size() - 1:
+								var next_key = clean_keys[_i+1]
+								var delta_time = next_key.time - current_key.time
+								var delta_value = next_key.value - current_key.value
+								
+								var current_curve = current_key["curve"]
+								var c1 = current_curve[0]
+								var c2 = current_curve[1]
+
+								out_handle.x = c1 * delta_time
+								out_handle.y = c2 * delta_value
+							
+							animation.bezier_track_insert_key(
+								track_index,
+								current_key.time,
+								current_key.value,
+								in_handle,
+								out_handle
+							)
+							if 预估时长<current_key.time:
+								预估时长 = current_key.time
 				
 				if 插槽动画数据[插槽名].has("attachment"):
 					var 切换帧 = 插槽动画数据[插槽名]["attachment"]
@@ -805,142 +860,260 @@ func 创建动画(json,s,_k,c):
 					if not remote_node.缩放:
 						scale_target = remote_node
 				
-				
 				if 骨骼动画数据[骨名].has("translate"):
-					var 位置通道 = {'x':0.0,'y':0.0}
-					for xy in 位置通道:
-						# 获取当前骨骼的原始变换
-						var 原始变换 = position_target.position
-						var 变换帧 = 骨骼动画数据[骨名]["translate"]
-						var 骨路径 =  str(node_2d.get_path_to(position_target)) + ":position:"+xy
-						var track_index = animation.add_track(Animation.TYPE_BEZIER)# 添加轨道
+					var 变换帧 = 骨骼动画数据[骨名]["translate"]
+					if 变换帧.is_empty(): continue
+
+					var 原始变换 = position_target.position
+					
+					# 分别为 x 和 y 轴创建轨道
+					for xy in ['x', 'y']:
+						var 骨路径 =  str(node_2d.get_path_to(position_target)) + ":position:" + xy
+						var track_index = animation.add_track(Animation.TYPE_BEZIER)
 						animation.track_set_path(track_index, 骨路径)
-						var 旧贝塞尔 = Vector2(0.0,0.0) # 上一个帧的贝塞尔值
-						var 延迟 = 0
-						for _t in 变换帧:
-							if _t.has("time"):
-								延迟 = _t["time"]
-								if 预估时长<延迟:
-									预估时长 = 延迟
-							var 变换值 = Vector2.ZERO
-							if _t.has("x"):
-								变换值.x = 原始变换.x + _t["x"]
-							else:
-								变换值.x = 原始变换.x
-							if _t.has("y"):
-								变换值.y = 原始变换.y + _t["y"]*-1
-							else:
-								变换值.y = 原始变换.y
-							var _变换值 = 0.0
-							if xy == 'x':
-								_变换值 = 变换值.x
-							elif xy == 'y':
-								_变换值 = 变换值.y
+
+						# -----------------------------------------------------------------
+						# 步骤 1: 将Spine数据解析成一个干净的Keyframe列表
+						# -----------------------------------------------------------------
+						var clean_keys = []
+
+						for frame_data in 变换帧:
+							var time = frame_data.get("time", 0.0)
 							
-							var 贝塞尔 = {'c1':0.0,'c2':0.0,'c3':0.0,'c4':0.0}
-							if _t.has("curve"):
-								if str(_t["curve"]) == 'stepped':
-									贝塞尔['c1'] = 100.0
-								else:
-									贝塞尔['c1'] = _t["curve"]
-							if _t.has("c2"):
-								贝塞尔['c2'] = _t["c2"]
-							if _t.has("c3"):
-								贝塞尔['c3'] = -1.0+_t["c3"]
-							if _t.has("c4"):
-								贝塞尔['c4'] = -1.0+_t["c4"]
-							animation.bezier_track_insert_key(track_index,延迟, _变换值,旧贝塞尔, Vector2(贝塞尔['c1'],贝塞尔['c2']))
-							旧贝塞尔 = Vector2(贝塞尔['c3'],贝塞尔['c4'])
+							var offset = frame_data.get(xy, 0.0)
+							if xy == 'y':
+								offset *= -1 # Godot的Y轴是向下的
+
+							var value = 原始变换[xy] + offset
+							var curve_params = parse_spine_curve(frame_data)
+							
+							clean_keys.append({
+								"time": time,
+								"value": value,
+								"curve": curve_params # 定义了从此帧到下一帧的曲线
+							})
+
+						# -----------------------------------------------------------------
+						# 步骤 2: 计算绝对控制柄并插入到Godot轨道中
+						# -----------------------------------------------------------------
+						for _i in range(clean_keys.size()):
+							var current_key = clean_keys[_i]
+							var in_handle = Vector2.ZERO
+							var out_handle = Vector2.ZERO
+
+							# 计算 In-Handle (由前一帧的出射曲线决定)
+							if _i > 0:
+								var prev_key = clean_keys[_i-1]
+								var delta_time = current_key.time - prev_key.time
+								var delta_value = current_key.value - prev_key.value
+								
+								var prev_curve = prev_key["curve"]
+								var c3 = prev_curve[2]
+								var c4 = prev_curve[3]
+								
+								in_handle.x = (c3 - 1.0) * delta_time
+								in_handle.y = (c4 - 1.0) * delta_value
+
+							# 计算 Out-Handle (由此帧的出射曲线和下一帧的位置决定)
+							if _i < clean_keys.size() - 1:
+								var next_key = clean_keys[_i+1]
+								var delta_time = next_key.time - current_key.time
+								var delta_value = next_key.value - current_key.value
+								
+								var current_curve = current_key["curve"]
+								var c1 = current_curve[0]
+								var c2 = current_curve[1]
+
+								out_handle.x = c1 * delta_time
+								out_handle.y = c2 * delta_value
+							
+							# 插入最终计算好的关键帧
+							animation.bezier_track_insert_key(
+								track_index,
+								current_key.time,
+								current_key.value,
+								in_handle,
+								out_handle
+							)
+							if 预估时长<current_key.time:
+								预估时长 = current_key.time
 					
 				if 骨骼动画数据[骨名].has("rotate"):
-					# 获取当前骨骼的旋转值，单位度数
-					var 原始旋转值 = rotation_target.rotation_degrees
 					var 旋转帧 = 骨骼动画数据[骨名]["rotate"]
+					if 旋转帧.is_empty(): continue
+
+					# 注意: 旋转动画始终应用于骨骼本身
+					var 原始旋转值 = rotation_target.rotation_degrees
+					
+					# 关键区别 1: 轨道路径是 :rotation (使用弧度)，而不是 :rotation_degrees
 					var 骨路径 =  str(node_2d.get_path_to(rotation_target)) + ":rotation"
-					var track_index = animation.add_track(Animation.TYPE_VALUE)# 添加轨道
-					# 解决欧拉角 的旋转插值方式造成的逆向旋转BUG
-					animation.track_set_interpolation_type(track_index,Animation.INTERPOLATION_LINEAR_ANGLE)
+					var track_index = animation.add_track(Animation.TYPE_BEZIER)
 					animation.track_set_path(track_index, 骨路径)
-					var 旧贝塞尔 = Vector2(0.0,0.0) # 上一个帧的贝塞尔值
-					var 旧帧旋转值 = 0.0
-					var 延迟 = 0
-					for _r in 旋转帧:
-						if _r.has("time"):
-							#if 延迟 == 0:
-							#	animation.track_insert_key(track_index,_r["time"]-0.01, s[骨名].rotation)# 添加第一帧初始化
-							延迟 = _r["time"]
-							if 预估时长<延迟:
-								预估时长 = 延迟
-						var 旋转值 = 0
-						if _r.has("angle"):
-							旋转值 = 原始旋转值 + _r["angle"]*-1
-						else:
-							旋转值 = 原始旋转值
+
+					# -----------------------------------------------------------------
+					# 步骤 1: 将Spine数据解析成一个干净的Keyframe列表 (单位: 度)
+					# -----------------------------------------------------------------
+					var clean_keys = []
+					for frame_data in 旋转帧:
+						var time = frame_data.get("time", 0.0)
 						
-						var 贝塞尔 = {'c1':0.0,'c2':0.0,'c3':0.0,'c4':0.0}
-						if _r.has("curve"):
-							if str(_r["curve"]) == 'stepped':
-								贝塞尔['c1'] = 100.0
-							else:
-								贝塞尔['c1'] = _r["curve"]
-						if _r.has("c2"):
-							贝塞尔['c2'] = _r["c2"]
-						if _r.has("c3"):
-							贝塞尔['c3'] = -1.0+_r["c3"]
-						if _r.has("c4"):
-							贝塞尔['c4'] = -1.0+_r["c4"]
+						# Spine的角度是偏移量, 且方向与Godot相反
+						var offset = frame_data.get("angle", 0.0) * -1.0
+						var value = 原始旋转值 + offset
 						
-						#var shortest_diff = adjust_angle(旧帧旋转值,deg_to_rad(旋转值))
-						animation.track_insert_key(track_index,延迟, deg_to_rad(旋转值))
-						#旧贝塞尔 = Vector2(贝塞尔['c3'],贝塞尔['c4'])
-						#旧帧旋转值 = shortest_diff
+						var curve_params = parse_spine_curve(frame_data)
+						
+						clean_keys.append({ "time": time, "value": value, "curve": curve_params })
+
+					# -----------------------------------------------------------------
+					# 步骤 2: "解包"角度值以确保总是走最短路径
+					# -----------------------------------------------------------------
+					var unwrapped_keys = []
+					if not clean_keys.is_empty():
+						unwrapped_keys.append(clean_keys[0]) # 第一个key保持不变
+						
+						for _i in range(1, clean_keys.size()):
+							var prev_key = unwrapped_keys[_i-1]
+							var current_key = clean_keys[_i]
+							
+							var diff = current_key.value - prev_key.value
+							# 将差值标准化到 -180 到 +180 之间
+							diff = fposmod(diff + 180.0, 360.0) - 180.0
+							
+							var unwrapped_value = prev_key.value + diff
+							
+							unwrapped_keys.append({
+								"time": current_key.time,
+								"value": unwrapped_value, # 使用解包后的值
+								"curve": current_key.curve
+							})
+					
+					# -----------------------------------------------------------------
+					# 步骤 3: 计算绝对控制柄并插入到Godot轨道中 (单位: 弧度)
+					# -----------------------------------------------------------------
+					for _i in range(unwrapped_keys.size()):
+						var current_key = unwrapped_keys[_i]
+						var in_handle = Vector2.ZERO
+						var out_handle = Vector2.ZERO
+
+						# 计算 In-Handle
+						if _i > 0:
+							var prev_key = unwrapped_keys[_i-1]
+							var delta_time = current_key.time - prev_key.time
+							# 关键区别 2: delta_value现在是解包后的差值, 并且要转为弧度
+							var delta_value = deg_to_rad(current_key.value - prev_key.value)
+							
+							var prev_curve = prev_key["curve"]
+							var c3 = prev_curve[2]
+							var c4 = prev_curve[3]
+							
+							in_handle.x = (c3 - 1.0) * delta_time
+							in_handle.y = (c4 - 1.0) * delta_value
+
+						# 计算 Out-Handle
+						if _i < unwrapped_keys.size() - 1:
+							var next_key = unwrapped_keys[_i+1]
+							var delta_time = next_key.time - current_key.time
+							var delta_value = deg_to_rad(next_key.value - current_key.value)
+							
+							var current_curve = current_key["curve"]
+							var c1 = current_curve[0]
+							var c2 = current_curve[1]
+
+							out_handle.x = c1 * delta_time
+							out_handle.y = c2 * delta_value
+						
+						# 关键区别 3: 插入轨道的值和控制柄的Y值都必须是弧度
+						animation.bezier_track_insert_key(
+							track_index,
+							current_key.time,
+							deg_to_rad(current_key.value),
+							in_handle,
+							out_handle
+						)
+						if 预估时长<current_key.time:
+							预估时长 = current_key.time
 				
 				if 骨骼动画数据[骨名].has("scale"):
-					var 位置通道 = {'x':0.0,'y':0.0}
-					for xy in 位置通道:
-						# 获取当前骨骼的原始缩放
-						var 原始缩放 = scale_target.scale
-						var 缩放帧 = 骨骼动画数据[骨名]["scale"]
-						var 骨路径 =  str(node_2d.get_path_to(scale_target)) + ":scale:"+xy
-						var track_index = animation.add_track(Animation.TYPE_BEZIER)# 添加轨道
+					var 缩放帧 = 骨骼动画数据[骨名]["scale"]
+					if 缩放帧.is_empty(): continue
+
+					# 注意: 此处使用了您要求的 scale_target
+					var 原始缩放 = scale_target.scale
+					
+					# 分别为 x 和 y 轴创建轨道
+					for xy in ['x', 'y']:
+						var 骨路径 =  str(node_2d.get_path_to(scale_target)) + ":scale:" + xy
+						var track_index = animation.add_track(Animation.TYPE_BEZIER)
 						animation.track_set_path(track_index, 骨路径)
-						var 旧贝塞尔 = Vector2(0.0,0.0) # 上一个帧的贝塞尔值
-						var 延迟 = 0
-						for _s in 缩放帧:
-							if _s.has("time"):
-								延迟 = _s["time"]
-								if 预估时长<延迟:
-									预估时长 = 延迟
-							var 缩放值 = Vector2.ONE
-							if _s.has("x"):
-								缩放值.x = _s["x"]
-							else:
-								缩放值.x = 原始缩放.x
-							if _s.has("y"):
-								缩放值.y = _s["y"]
-							else:
-								缩放值.y = 原始缩放.y
+
+						# -----------------------------------------------------------------
+						# 步骤 1: 将Spine数据解析成一个干净的Keyframe列表
+						# -----------------------------------------------------------------
+						var clean_keys = []
+
+						for frame_data in 缩放帧:
+							var time = frame_data.get("time", 0.0)
 							
-							var _缩放值 = 0.0
-							if xy == 'x':
-								_缩放值 = 缩放值.x
-							elif xy == 'y':
-								_缩放值 = 缩放值.y
+							# 主要区别：
+							# 1. scale的值是直接替换，而不是偏移量
+							# 2. 如果帧数据中没有该轴的值，则使用原始缩放值
+							# 3. Y轴不需要*-1
+							var value = frame_data.get(xy, 原始缩放[xy])
+							
+							var curve_params = parse_spine_curve(frame_data)
+							
+							clean_keys.append({
+								"time": time,
+								"value": value,
+								"curve": curve_params
+							})
+
+						# -----------------------------------------------------------------
+						# 步骤 2: 计算绝对控制柄并插入到Godot轨道中
+						# -----------------------------------------------------------------
+						# 注意: 此处使用了您要求的循环变量 _i
+						for _i in range(clean_keys.size()):
+							var current_key = clean_keys[_i]
+							var in_handle = Vector2.ZERO
+							var out_handle = Vector2.ZERO
+
+							# 计算 In-Handle (由前一帧的出射曲线决定)
+							if _i > 0:
+								var prev_key = clean_keys[_i-1]
+								var delta_time = current_key.time - prev_key.time
+								var delta_value = current_key.value - prev_key.value
 								
-							var 贝塞尔 = {'c1':0.0,'c2':0.0,'c3':0.0,'c4':0.0}
-							if _s.has("curve"):
-								if str(_s["curve"]) == 'stepped':
-									贝塞尔['c1'] = 100.0
-								else:
-									贝塞尔['c1'] = _s["curve"]
-							if _s.has("c2"):
-								贝塞尔['c2'] = _s["c2"]
-							if _s.has("c3"):
-								贝塞尔['c3'] = -1.0+_s["c3"]
-							if _s.has("c4"):
-								贝塞尔['c4'] = -1.0+_s["c4"]
-							animation.bezier_track_insert_key(track_index,延迟, _缩放值,旧贝塞尔, Vector2(贝塞尔['c1'],贝塞尔['c2']))
-							旧贝塞尔 = Vector2(贝塞尔['c3'],贝塞尔['c4'])
+								var prev_curve = prev_key["curve"]
+								var c3 = prev_curve[2]
+								var c4 = prev_curve[3]
+								
+								in_handle.x = (c3 - 1.0) * delta_time
+								in_handle.y = (c4 - 1.0) * delta_value
+
+							# 计算 Out-Handle (由此帧的出射曲线和下一帧的位置决定)
+							if _i < clean_keys.size() - 1:
+								var next_key = clean_keys[_i+1]
+								var delta_time = next_key.time - current_key.time
+								var delta_value = next_key.value - current_key.value
+								
+								var current_curve = current_key["curve"]
+								var c1 = current_curve[0]
+								var c2 = current_curve[1]
+
+								out_handle.x = c1 * delta_time
+								out_handle.y = c2 * delta_value
+							
+							# 插入最终计算好的关键帧
+							animation.bezier_track_insert_key(
+								track_index,
+								current_key.time,
+								current_key.value,
+								in_handle,
+								out_handle
+							)
+							if 预估时长<current_key.time:
+								预估时长 = current_key.time
 		
 		animation.set_length(预估时长)
 		
