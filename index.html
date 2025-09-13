@@ -14,6 +14,7 @@
                 <ul>
                     <li><a href="#home">首页</a></li>
                     <li><a href="#features">功能</a></li>
+                    <li><a href="#comparison">对比</a></li>
                     <li><a href="#tutorial">教程</a></li>
                     <li><a href="#download">下载</a></li>
                     <li><a href="#about">关于</a></li>
@@ -58,6 +59,111 @@
                     <h3>骨骼动画</h3>
                     <p>完整支持Spine骨骼动画和变形</p>
                 </div>
+            </div>
+        </div>
+    </section>
+
+    <section id="comparison" class="comparison">
+        <div class="container">
+            <h2>功能对比表</h2>
+            <p>Spine动画功能与Godot格式支持对比</p>
+            <div class="comparison-table">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>功能名称</th>
+                            <th>Spine支持</th>
+                            <th>Godot格式支持</th>
+                            <th>解释</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>倾斜</td>
+                            <td>✅ 支持</td>
+                            <td>❌ 不支持</td>
+                            <td>不支持转换，godot本身支持倾斜，使用较少</td>
+                        </tr>
+                        <tr>
+                            <td>变换约束</td>
+                            <td>✅ 支持</td>
+                            <td>❌ 不支持</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>路径约束</td>
+                            <td>✅ 支持</td>
+                            <td>❌ 不支持</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>裁剪</td>
+                            <td>✅ 支持</td>
+                            <td>❌ 不支持</td>
+                            <td>可以在外面手动套一个遮罩简单替代，复杂的裁剪目前不行</td>
+                        </tr>
+                        <tr>
+                            <td>克隆网格</td>
+                            <td>✅ 支持</td>
+                            <td>❌ 不支持</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>皮肤切换</td>
+                            <td>✅ 支持</td>
+                            <td>❌ 不支持</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>图集</td>
+                            <td>✅ 支持</td>
+                            <td>✅ 支持</td>
+                            <td>spine导出时不能勾选旋转，godot图集不支持旋转子图</td>
+                        </tr>
+                        <tr>
+                            <td>骨骼变换轨道</td>
+                            <td>✅ 支持</td>
+                            <td>✅ 支持</td>
+                            <td>骨骼动画支持不继承旋转或缩放</td>
+                        </tr>
+                        <tr>
+                            <td>网格变形轨道</td>
+                            <td>✅ 支持</td>
+                            <td>✅ 支持</td>
+                            <td>godot的网格变形轨道不支持贝塞尔曲线类型，只能使用TYPE_VALUE轨道不能微调动画</td>
+                        </tr>
+                        <tr>
+                            <td>帧轨道</td>
+                            <td>✅ 支持</td>
+                            <td>✅ 支持</td>
+                            <td>用来制作序列帧动画</td>
+                        </tr>
+                        <tr>
+                            <td>颜色轨道</td>
+                            <td>✅ 支持</td>
+                            <td>✅ 支持</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>IK约束</td>
+                            <td>✅ 支持</td>
+                            <td>✅ 支持</td>
+                            <td>godot骨骼修改器IK方案有局限性，使用IK时不能缩放骨骼，最好烘焙成骨骼动画</td>
+                        </tr>
+                        <tr>
+                            <td>绘制顺序轨道</td>
+                            <td>✅ 支持</td>
+                            <td>❌ 不支持</td>
+                            <td></td>
+                        </tr>
+                        <tr>
+                            <td>事件轨道</td>
+                            <td>✅ 支持</td>
+                            <td>❌ 不支持</td>
+                            <td></td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </section>
@@ -184,7 +290,7 @@
             <h2>下载SpineToGodot</h2>
             <p>当前仅支持Windows平台</p>
             <div class="download-options">
-                <a href="https://github.com/gaoyan2659365465/spinetogodot/releases/download/godot2/SpineToGodot.exe" class="btn btn-secondary">Windows (EXE)</a>
+                <a href="https://github.com/gaoyan2659365465/spinetogodot/releases/download/godot3/SpineToGodot_1_3.exe" class="btn btn-secondary">Windows (EXE)</a>
             </div>
             <p class="note">下载后即可使用，无需额外安装。</p>
         </div>

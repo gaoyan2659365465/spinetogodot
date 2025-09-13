@@ -1166,12 +1166,12 @@ func 创建动画(json,s,_k,c):
 			RESET_anim.bezier_track_insert_key(track_index,0.0, 位置通道[xy])
 		
 		var 骨骼旋转径 =  str(node_2d.get_path_to(s[i])) + ":rotation"
-		var track_index2 = RESET_anim.add_track(Animation.TYPE_VALUE)# 添加轨道
+		var track_index2 = RESET_anim.add_track(Animation.TYPE_BEZIER)# 添加轨道
 		RESET_anim.track_set_path(track_index2, 骨骼旋转径)
-		RESET_anim.track_insert_key(track_index2,0.0, s[i].rotation)
-		RESET_anim.value_track_set_update_mode(track_index2,Animation.UPDATE_DISCRETE)
+		RESET_anim.bezier_track_insert_key(track_index2,0.0, s[i].rotation)
+		#RESET_anim.value_track_set_update_mode(track_index2,Animation.UPDATE_DISCRETE)
 		# 必须要跟上面所有动画的插值类型一样才不会警告
-		RESET_anim.track_set_interpolation_type(track_index2,Animation.INTERPOLATION_LINEAR_ANGLE)
+		#RESET_anim.track_set_interpolation_type(track_index2,Animation.INTERPOLATION_LINEAR_ANGLE)
 		
 		var 缩放通道 = {'x':s[i].scale.x,'y':s[i].scale.y}
 		for xy in 缩放通道:
@@ -1185,12 +1185,12 @@ func 创建动画(json,s,_k,c):
 		var remote_node = s[i].find_child("NoRotation", false) # false表示非递归查找
 		if remote_node:
 			var 旋转径 =  str(node_2d.get_path_to(remote_node)) + ":rotation"
-			var track_index2 = RESET_anim.add_track(Animation.TYPE_VALUE)# 添加轨道
+			var track_index2 = RESET_anim.add_track(Animation.TYPE_BEZIER)# 添加轨道
 			RESET_anim.track_set_path(track_index2, 旋转径)
-			RESET_anim.track_insert_key(track_index2,0.0, remote_node.rotation)
-			RESET_anim.value_track_set_update_mode(track_index2,Animation.UPDATE_DISCRETE)
+			RESET_anim.bezier_track_insert_key(track_index2,0.0, remote_node.rotation)
+			#RESET_anim.value_track_set_update_mode(track_index2,Animation.UPDATE_DISCRETE)
 			# 必须要跟上面所有动画的插值类型一样才不会警告
-			RESET_anim.track_set_interpolation_type(track_index2,Animation.INTERPOLATION_LINEAR_ANGLE)
+			#RESET_anim.track_set_interpolation_type(track_index2,Animation.INTERPOLATION_LINEAR_ANGLE)
 			
 			var 缩放通道 = {'x':s[i].scale.x,'y':s[i].scale.y}
 			for xy in 缩放通道:

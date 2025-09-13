@@ -168,6 +168,78 @@ nav ul li a:hover {
     color: #3498db;
 }
 
+/* Comparison table section */
+.comparison {
+    padding: 80px 0;
+    background-color: white;
+}
+
+.comparison h2 {
+    text-align: center;
+    font-size: 2.5rem;
+    margin-bottom: 1rem;
+    color: #2c3e50;
+}
+
+.comparison > .container > p {
+    text-align: center;
+    font-size: 1.2rem;
+    margin-bottom: 3rem;
+    color: #7f8c8d;
+}
+
+.comparison-table {
+    overflow-x: auto;
+    border-radius: 10px;
+    box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+}
+
+.comparison table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: white;
+}
+
+.comparison thead {
+    background-color: #3498db;
+    color: white;
+}
+
+.comparison th,
+.comparison td {
+    padding: 1rem;
+    text-align: center;
+    border-bottom: 1px solid #ddd;
+}
+
+.comparison th {
+    font-weight: 600;
+    font-size: 1.1rem;
+}
+
+.comparison td {
+    font-size: 1rem;
+}
+
+.comparison tbody tr:nth-child(even) {
+    background-color: #f8f9fa;
+}
+
+.comparison tbody tr:hover {
+    background-color: #e9ecef;
+}
+
+.comparison td:first-child {
+    text-align: left;
+    font-weight: 500;
+}
+
+.comparison td:last-child {
+    text-align: left;
+    font-size: 0.9rem;
+    color: #666;
+}
+
 /* Download section */
 .download {
     padding: 80px 0;
@@ -408,5 +480,24 @@ footer {
 
     .tutorial-episode {
         padding: 1rem;
+    }
+
+    .comparison h2 {
+        font-size: 2rem;
+    }
+
+    .comparison th,
+    .comparison td {
+        padding: 0.3rem;
+        font-size: 0.8rem;
+    }
+
+    .comparison td:first-child {
+        font-size: 0.8rem;
+    }
+
+    .comparison td:last-child {
+        font-size: 0.75rem;
+        padding: 0.3rem 0.5rem;
     }
 }
